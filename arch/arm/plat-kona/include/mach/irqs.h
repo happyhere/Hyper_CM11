@@ -26,8 +26,8 @@
 #ifndef __PLAT_KONA_IRQS_H
 #define __PLAT_KONA_IRQS_H
 
-#define BCM_INT_PRIORITY_MAX    32	/* there are only 32 priority are supported */
-#define BCM_INT_SPI_MAX         128	/* there are 128 shared peripheral interrupt */
+#define BCM_INT_PRIORITY_MAX    32  /* there are only 32 priority are supported */
+#define BCM_INT_SPI_MAX         128 /* there are 128 shared peripheral interrupt */
 
 /*=====================================================================*/
 /* Software Trigger Interrupt IDs                                      */
@@ -48,7 +48,7 @@
 #define BCM_INT_ID_STI13                13
 #define BCM_INT_ID_STI14                14
 #define BCM_INT_ID_STI15                15
-#define BCM_INT_ID_STI_MAX              16	/* terminating ID */
+#define BCM_INT_ID_STI_MAX              16 /* terminating ID */
 
 /*=====================================================================*/
 /* Private Peripheral Interrupt IDs                                    */
@@ -69,7 +69,7 @@
 #define BCM_INT_ID_PPI13                (13 + BCM_INT_ID_STI_MAX)
 #define BCM_INT_ID_PPI14                (14 + BCM_INT_ID_STI_MAX)
 #define BCM_INT_ID_PPI15                (15 + BCM_INT_ID_STI_MAX)
-#define BCM_INT_ID_PPI_MAX              (16 + BCM_INT_ID_STI_MAX)	/* terminating ID */
+#define BCM_INT_ID_PPI_MAX              (16 + BCM_INT_ID_STI_MAX) /* terminating ID */
 
 /*=====================================================================*/
 /* Shared Peripheral Interrupt IDs                                     */
@@ -155,8 +155,8 @@
 #define BCM_INT_ID_I2S                  (81 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED82           (82 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED83           (83 + BCM_INT_ID_PPI_MAX)
-#define BCM_INT_ID_SSP4                 (84 + BCM_INT_ID_PPI_MAX)
-#define BCM_INT_ID_SSP3                 (85 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_DEFLAGS0             (84 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_DEFLAGS1             (85 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_SSP2                 (86 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED87           (87 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED88           (88 + BCM_INT_ID_PPI_MAX)
@@ -193,14 +193,14 @@
 #define BCM_INT_ID_HSM10                (119 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_HSM11                (120 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_AUDIO                (121 + BCM_INT_ID_PPI_MAX)
-#define BCM_INT_ID_HSM13                (122 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_SSP3_ERR             (122 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_AUXMIC_COMP2_INV     (123 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_CAPH                 (124 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED125          (125 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED126          (126 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_KEYPAD               (127 + BCM_INT_ID_PPI_MAX)
-#define BCM_INT_ID_RESERVED128          (128 + BCM_INT_ID_PPI_MAX)
-#define BCM_INT_ID_RESERVED129          (129 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_USB_OTG_WAKEUP       (128 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_IC_USB_WAKEUP        (129 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED130          (130 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_AUXMIC_COMP1          (131 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_AUXMIC_COMP2          (132 + BCM_INT_ID_PPI_MAX)
@@ -240,9 +240,9 @@
 #define BCM_INT_ID_RESERVED166          (166 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED167          (167 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_CAPH_ERR             (168 + BCM_INT_ID_PPI_MAX)
-#define BCM_INT_ID_RESERVED169          (169 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_I2C2          		(169 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED170          (170 + BCM_INT_ID_PPI_MAX)
-#define BCM_INT_ID_RESERVED171          (171 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_HSIC2_EHCI           (171 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED172          (172 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED173          (173 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_RESERVED174          (174 + BCM_INT_ID_PPI_MAX)
@@ -271,7 +271,31 @@
 #define BCM_INT_ID_ESUB_DMAC_5          (197 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_ESUB_DMAC_6          (198 + BCM_INT_ID_PPI_MAX)
 #define BCM_INT_ID_ESUB_DMAC_7          (199 + BCM_INT_ID_PPI_MAX)
-#define BCM_INT_ID_MAX                  (200 + BCM_INT_ID_PPI_MAX)	/* terminating ID */
+#define BCM_INT_ID_RESERVED200          (200 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_RESERVED201          (201 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_RESERVED202          (202 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_EAV_DMP_AOUT         (203 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_SSP5_ERR             (204 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_SSP6_ERR             (205 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_USBH2_P0_WAKEUP      (206 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_USBH2_P1_WAKEUP      (207 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_OPEN_WD_TIMER        (208 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_OPEN_WD_UTC          (209 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_OPEN_WD_CHK          (210 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_HSIC2_STATE00        (211 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_HSIC2_STATE01        (212 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_HSIC2_STATE10        (213 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_HSIC2_STATE11        (214 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_PMU_INT              (215 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_BAT_RM               (216 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_RESERVED217          (217 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_RESERVED218          (218 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_RESERVED219          (219 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_RESERVED220          (220 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_RESERVED221          (221 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_RESERVED222          (222 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_RESERVED223          (223 + BCM_INT_ID_PPI_MAX)
+#define BCM_INT_ID_MAX                  (224 + BCM_INT_ID_PPI_MAX) /* terminating ID */
 
 /* temporarily for new DMAC before new interrrupt number release */
 #define     INTP_DMAC_ABORT                                        45
@@ -285,22 +309,22 @@
 /* For AP-CP */
 #define IRQ_APCP_0		BCM_INT_ID_RESERVED36
 #define IRQ_IPC_A2C             235
-#define IRQ_IPC_C2A             199	//279
-#define IRQ_IPC_C2A_BINTC       279	//BMIRQ55
-#define IRQ_GPIO                (2 + IRQ_APCP_0)	/* GPIO */
+#define IRQ_IPC_C2A             199 //279
+#define IRQ_IPC_C2A_BINTC       279 //BMIRQ55
+#define IRQ_GPIO                (2 + IRQ_APCP_0)      /* GPIO */
 #define NUM_APCP_IRQS		32
 
-/* Start virtual GPIO range above this max irq number */
+/* Start virtual GPIO range above this max irq number */													
 #define IRQ_GPIO_0			300
 
-#define NUM_GPIO_IRQS			192
+#define NUM_GPIO_IRQS			192 
 
 #define  gpio_to_irq(gpio)		((gpio) + IRQ_GPIO_0 )
 #define  irq_to_gpio(irq)		((irq) - IRQ_GPIO_0 )
 
 #ifdef CONFIG_GPIO_PCA953X
 #ifdef CONFIG_MACH_RHEA_RAY_EDN1X
-#define EXPANDED_GPIO_IRQS    32	/*2 expander on RheaRayEDN1x, 32 irqs expanded */
+#define EXPANDED_GPIO_IRQS    32	/*2 expander on RheaRayEDN1x, 32 irqs expanded*/
 #else
 #define EXPANDED_GPIO_IRQS    16
 #endif
@@ -308,5 +332,6 @@
 #else
 #define NR_IRQS               (IRQ_GPIO_0 + NUM_GPIO_IRQS)
 #endif
+
 
 #endif /* __PLAT_KONA_IRQS_H */
