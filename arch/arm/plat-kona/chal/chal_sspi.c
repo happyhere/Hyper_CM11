@@ -46,7 +46,7 @@
 #define MAX_SSPI_LITE_FIFOS       4
 #define MAX_SSPI_LITE_FIFO_SIZE   128
 
-#define MAX_CHAL_SSPI_BLOCKS    6
+#define NUM_CHAL_SSPI_BLOCK    4
 
 #define SSPI_SCLK_CYCLE_MINUS1    0xF
 #define SSPI_MASTER_CLK_CYCLE_PER_BIT    0x2
@@ -70,25 +70,6 @@
  * ===========================================================================
  *  local type definitions
  */
-/**
-* SSPI CAPH clock trigger type
-******************************************************************************/
-enum CHAL_SSPI_CAPH_CLK_TRIG_t {
-	SSPI_CAPH_CLK_TRIG_INVALID,
-	SSPI_CAPH_CLK_TRIG_4kHz,
-	SSPI_CAPH_CLK_TRIG_8kHz,
-	SSPI_CAPH_CLK_TRIG_12kHz,
-	SSPI_CAPH_CLK_TRIG_16kHz,
-	SSPI_CAPH_CLK_TRIG_24kHz,
-	SSPI_CAPH_CLK_TRIG_32kHz,
-	SSPI_CAPH_CLK_TRIG_48kHz,
-	SSPI_CAPH_CLK_TRIG_96kHz,
-	SSPI_CAPH_CLK_TRIG_11DOT025kHz,
-	SSPI_CAPH_CLK_TRIG_22DOT05kHz,
-	SSPI_CAPH_CLK_TRIG_44DOT1kHz,
-	SSPI_CAPH_CLK_TRIG_MAX,
-};
-#define CHAL_SSPI_CAPH_CLK_TRIG_t enum CHAL_SSPI_CAPH_CLK_TRIG_t
 
 /* general purpose */
 #define FLD_CLEAR(val, mask) ((val) &= ~(mask))
@@ -127,64 +108,18 @@ enum CHAL_SSPI_CAPH_CLK_TRIG_t {
 #define CDBG_WARN       2
 #define CDBG_INFO       3
 #define CDBG_INFO2      4
+#define chal_dprintf(t, fmt, args...) printk(fmt, ##args)
 
 /*
  * ===========================================================================
  *  global variable declarations
  *
  */
-CHAL_SSPI_HANDLE_t sspi_dev[MAX_CHAL_SSPI_BLOCKS] = {
-	[0] = {.base = 0,},
-	[1] = {.base = 0,},
-	[2] = {.base = 0,},
-	[3] = {.base = 0,},
-	[4] = {.base = 0,},
-	[5] = {.base = 0,},
-};
+CHAL_SSPI_HANDLE_t sspi_dev[NUM_CHAL_SSPI_BLOCK];
 
-/**
-*
-*  @brief  Set the CAPH clock generation parameters
-*
-*  @param    handle         (in) SSPI CHAL handle
-*  @param    trig           (in) the trigger selection
-*  @param    num_cycle_edge (in) the number of 26MHz period between each clock
-*                                edges, minus one
-*  @param    num_clk_edge   (in) the number of clock edges between each
-*                                resynchronization, minus one
-*  @param    enable         (in) enable/disable the 26MHz clock
-*                                resynchronization mecanism
-*
-*  @return SSPI status
-******************************************************************************/
-static CHAL_SSPI_STATUS_t chal_sspi_set_caph_clk_gen(CHAL_HANDLE handle,
-						CHAL_SSPI_CAPH_CLK_TRIG_t trig,
-						uint32_t num_cycle_edge,
-						uint32_t num_clk_edge,
-						uint32_t enable);
-
-#if 0
-/**
-*
-*  @brief  Get the CAPH clock generation parameters
-*
-*  @param    handle         (in)  SSPI CHAL handle
-*  @param    trig           (out) the trigger selection
-*  @param    num_cycle_edge (out) the number of 26MHz period between each clock
-*                                 edges, minus one
-*  @param    num_clk_edge   (out) the number of clock edges between each
-*                                 resynchronization, minus one
-*  @param    enable         (out) enable/disable the 26MHz clock
-*                                 resynchronization mecanism
-*
-*  @return SSPI status
-******************************************************************************/
-static CHAL_SSPI_STATUS_t chal_sspi_get_caph_clk_gen(CHAL_HANDLE handle,
-						CHAL_SSPI_CAPH_CLK_TRIG_t *trig,
-						uint32_t *num_cycle_edge,
-						uint32_t *num_clk_edge,
-						uint32_t *enable);
-#endif
+/****************************************************************************
+* static function declarations
+*/
 
 /****************************************************************************
 *
@@ -196,7 +131,7 @@ static CHAL_SSPI_STATUS_t chal_sspi_get_caph_clk_gen(CHAL_HANDLE handle,
 CHAL_HANDLE chal_sspi_init(uint32_t baseAddr)
 {
 	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *) NULL;
-	uint32_t i, val;
+	uint32_t i;
 
 	chal_dprintf(CDBG_INFO, "+chal_sspi_init\n");
 
@@ -206,72 +141,25 @@ CHAL_HANDLE chal_sspi_init(uint32_t baseAddr)
 	}
 
 	/* Don't re-init a block */
-	for (i = 0; i < MAX_CHAL_SSPI_BLOCKS; i++)
+	for (i = 0; i < NUM_CHAL_SSPI_BLOCK; i++)
 		if (sspi_dev[i].base == baseAddr)
 			return (CHAL_HANDLE)&sspi_dev[i];
 
 	/* find a free slot for this new block */
-	for (i = 0; i < MAX_CHAL_SSPI_BLOCKS; i++) {
+	for (i = 0; i < NUM_CHAL_SSPI_BLOCK; i++) {
 		if (!sspi_dev[i].base)
 			break;
 	}
 
-	if (i != MAX_CHAL_SSPI_BLOCKS) {
+	if (i != NUM_CHAL_SSPI_BLOCK) {
 		sspi_dev[i].base = baseAddr;
+		sspi_dev[i].type = SSPI_TYPE_LITE;
 		pDevice = &sspi_dev[i];
-		val = CHAL_REG_READ32(pDevice->base +
-					SSPIL_CONFIGURATION_CHECK_OFFSET);
-		sspi_dev[i].num_frames = FLD_GET(
-			val, SSPIL_CONFIGURATION_CHECK_FRAME_NUMBER_SHIFT,
-			SSPIL_CONFIGURATION_CHECK_FRAME_NUMBER_MASK) + 1;
-		sspi_dev[i].num_tasks = FLD_GET(
-			val, SSPIL_CONFIGURATION_CHECK_TASK_NUMBER_SHIFT,
-				SSPIL_CONFIGURATION_CHECK_TASK_NUMBER_MASK) + 1;
-		sspi_dev[i].num_seqs = FLD_GET(
-			val, SSPIL_CONFIGURATION_CHECK_SEQUENCE_NUMBER_SHIFT,
-			SSPIL_CONFIGURATION_CHECK_SEQUENCE_NUMBER_MASK) + 1;
-		sspi_dev[i].num_fifos = FLD_GET(
-			val, SSPIL_CONFIGURATION_CHECK_FIFO_NUMBER_SHIFT,
-			SSPIL_CONFIGURATION_CHECK_FIFO_NUMBER_MASK) + 1;
-		sspi_dev[i].num_dma = FLD_GET(
-			val, SSPIL_CONFIGURATION_CHECK_DMA_NUMBER_SHIFT,
-			SSPIL_CONFIGURATION_CHECK_DMA_NUMBER_MASK) + 1;
-		sspi_dev[i].num_cs = FLD_GET(
-			val, SSPIL_CONFIGURATION_CHECK_CS_NUMBER_SHIFT,
-			SSPIL_CONFIGURATION_CHECK_CS_NUMBER_MASK) + 1;
-		sspi_dev[i].num_tx = FLD_GET(
-			val, SSPIL_CONFIGURATION_CHECK_TX_NUMBER_SHIFT,
-			SSPIL_CONFIGURATION_CHECK_TX_NUMBER_MASK) + 1;
-		sspi_dev[i].fifo_maxsize = FLD_GET(
-			val, SSPIL_CONFIGURATION_CHECK_FIFO_MAXSIZE_SHIFT,
-			SSPIL_CONFIGURATION_CHECK_TX_NUMBER_MASK) + 1;
-		switch (FLD_GET(
-			val, SSPIL_CONFIGURATION_CHECK_FIFO_MAXSIZE_SHIFT,
-			SSPIL_CONFIGURATION_CHECK_TX_NUMBER_MASK)) {
-		case 11:
-			sspi_dev[i].fifo_maxsize = 2048;
-			break;
-		case 9:
-			sspi_dev[i].fifo_maxsize = 512;
-			break;
-		case 7:
-		default:
-			sspi_dev[i].fifo_maxsize = 128;
-			break;
-		}
 	} else {
 		chal_dprintf(CDBG_ERRO,
 			     "ERROR: chal_sspi_init: bad instance\n");
-		return (CHAL_HANDLE)NULL;
 	}
-	if ((sspi_dev[i].num_frames < MAX_SSPI_LITE_FRAMES) ||
-		(sspi_dev[i].num_tasks < MAX_SSPI_LITE_TASKS) ||
-		(sspi_dev[i].num_seqs < MAX_SSPI_LITE_SEQUENCES) ||
-		(sspi_dev[i].num_fifos < MAX_SSPI_LITE_FIFOS)) {
-		chal_dprintf(CDBG_ERR,
-			"Could not get SSPI resource configuration\n");
-		return (CHAL_HANDLE)NULL;
-	}
+
 	/* Return non-null value */
 
 	chal_dprintf(CDBG_INFO, "-chal_sspi_init(pDevice = 0x%08x\r\n)",
@@ -296,34 +184,13 @@ CHAL_SSPI_STATUS_t chal_sspi_deinit(CHAL_HANDLE handle)
 		return CHAL_SSPI_STATUS_ILLEGAL_HANDLE;
 	}
 
-	for (i = 0; i < MAX_CHAL_SSPI_BLOCKS; i++)
+	for (i = 0; i < NUM_CHAL_SSPI_BLOCK; i++)
 		if ((uint32_t)handle == (uint32_t)&sspi_dev[i]) {
 			sspi_dev[i].base = 0;
+			sspi_dev[i].type = SSPI_TYPE_FULL;
 			return CHAL_SSPI_STATUS_SUCCESS;
 		}
 	return CHAL_SSPI_STATUS_ILLEGAL_HANDLE;
-}
-
-/****************************************************************************
-*
-*  Function Name: uint32_t chal_sspi_get_max_fifo_size()
-*
-*  Description: Returns the physical fifo size. Rx and Tx fifos have
-*  the same max size.
-*
-****************************************************************************/
-CHAL_SSPI_STATUS_t chal_sspi_get_max_fifo_size(CHAL_HANDLE handle,
-							uint32_t *fifo_size)
-{
-	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *)handle;
-
-	if (!handle) {
-		chal_dprintf(CDBG_ERRO, "invalid argument\n");
-		return CHAL_SSPI_STATUS_ILLEGAL_HANDLE;
-	}
-	*fifo_size = pDevice->fifo_maxsize;
-
-	return CHAL_SSPI_STATUS_SUCCESS;
 }
 
 /****************************************************************************
@@ -424,6 +291,33 @@ uint32_t chal_sspi_tx3_get_dma_port_addr_offset(void)
 
 /****************************************************************************
 *
+*  Function Name: CHAL_SSPI_STATUS_t chal_sspi_set_type(
+*                                  CHAL_HANDLE handle,
+*                                  CHAL_SSPI_TYPE_t type)
+*
+*  Description: Set SSPI type. There two types of SSPI core, Full-version core
+*               or Lite-version core.
+*
+****************************************************************************/
+CHAL_SSPI_STATUS_t chal_sspi_set_type(CHAL_HANDLE handle, CHAL_SSPI_TYPE_t type)
+{
+	uint32_t i;
+
+	if (!handle) {
+		chal_dprintf(CDBG_ERRO, "invalid argument\n");
+		return CHAL_SSPI_STATUS_ILLEGAL_HANDLE;
+	}
+
+	for (i = 0; i < NUM_CHAL_SSPI_BLOCK; i++)
+		if (handle == &sspi_dev[i]) {
+			sspi_dev[i].type = type;
+			return CHAL_SSPI_STATUS_SUCCESS;
+		}
+	return CHAL_SSPI_STATUS_ILLEGAL_HANDLE;
+}
+
+/****************************************************************************
+*
 *  Function Name: CHAL_SSPI_STATUS_t chal_sspi_set_mode(
 *                                  CHAL_HANDLE handle,
 *                                  CHAL_SSPI_MODE_t mode)
@@ -500,159 +394,39 @@ CHAL_SSPI_STATUS_t chal_sspi_soft_reset(CHAL_HANDLE handle)
 
 /****************************************************************************
 *
-*  Function Name: CHAL_SSPI_STATUS_t chal_sspi_set_i2c_frame(
-*                                  CHAL_HANDLE handle,
-*                                  uint32_t *frm_bitmap,
-*                                  uint32_t word_len)
-*
-*  Description: Setup a SSPI i2c frame
-*
-****************************************************************************/
-CHAL_SSPI_STATUS_t chal_sspi_set_i2c_frame(CHAL_HANDLE handle,
-					uint32_t *frm_bitmap,
-					uint32_t word_len)
-{
-	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *)handle;
-	uint32_t val = 0, frm_idx = 0, frm_idx0 = 0xFFFFFFFF;
-
-	if (!handle || !frm_bitmap) {
-		chal_dprintf(CDBG_ERRO, "invalid argument\n");
-		return CHAL_SSPI_STATUS_ILLEGAL_PARA;
-	}
-	/* Mask out the unused bits of frm_bitmap */
-	*frm_bitmap &= (1 << pDevice->num_frames) - 1;
-
-	if (!(*frm_bitmap))
-		return CHAL_SSPI_STATUS_ILLEGAL_FRAME;
-
-	/* Get the idx of the first frame */
-	while (!(*frm_bitmap & (1 << frm_idx)))
-		frm_idx++;
-
-	frm_idx0 = frm_idx;
-	*frm_bitmap &= ~(1<<frm_idx++);
-	if (!(*frm_bitmap))
-		return CHAL_SSPI_STATUS_ILLEGAL_FRAME;
-
-	while (!(*frm_bitmap & (1 << frm_idx)))
-		frm_idx++;
-
-	/* Setup the Tx Frame*/
-	val = (72 << SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
-		  SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK |
-		  SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TX_IDLE_VALUE_MASK |
-		  SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TXOEN_IDLE_VALUE_MASK;
-	CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx0,
-					pDevice->base +
-					SSPIL_FRAME0_CS_IDLE_DEF_OFFSET),
-					val);
-
-	/* SCLK_START 2, SCLK_END 70, SCLK_RATIO 1:8*/
-	val = (2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
-		  (70 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
-		  (2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
-	CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx0,
-					pDevice->base +
-					SSPIL_FRAME0_SCLK_DEF_OFFSET),
-					val);
-
-	/*
-	 *  TXOEN_START 0x0, TXOEN_END 8*8, TX_WORD_LENGTH 0x7, TX_START 0x0,
-	 *  TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
-	 */
-	val = (0 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) |
-		(0 << SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_START_SHIFT) |
-		((word_len * 8) << SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_END_SHIFT) |
-		(word_len-1) << SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
-	CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx0,
-				pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
-				val);
-
-	/* RX_WORD_LENGTH: 8, RX_START: 14 */
-	val = ((word_len - 1) <<
-			SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
-		  (14 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
-	CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx0,
-				pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
-				val);
-	*frm_bitmap = 1 << frm_idx0;
-
-	/* Setup the Rx Frame*/
-	val = ((72) << SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
-		  SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK |
-		  SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TX_IDLE_VALUE_MASK |
-		  SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TXOEN_IDLE_VALUE_MASK;
-	CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-			pDevice->base + SSPIL_FRAME0_CS_IDLE_DEF_OFFSET),
-			val);
-
-	/* SCLK_START 2, SCLK_END 70, FIRST_ACTIVE_EDGE 0, SCLK_RATIO 1:8*/
-	val = (2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
-		  (70 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
-		  (2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
-	CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_SCLK_DEF_OFFSET),
-				val);
-
-	/*
-	 *  TXOEN_START 0x0, TXOEN_END 8*8, TX_WORD_LENGTH 0x7, TX_START 0x0,
-	 *  TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
-	 */
-	val = (8 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) |
-		  (8 << SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_START_SHIFT) |
-		  (((word_len + 1) * 8) <<
-				SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_END_SHIFT) |
-		  ((word_len - 1) <<
-			SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT);
-	CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
-				val);
-
-	/* RX_WORD_LENGTH: 8, RX_START: 6 */
-	val = ((word_len-1) <<
-			SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
-		  (6 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
-	CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
-				val);
-	*frm_bitmap |= 1 << frm_idx;
-
-	return CHAL_SSPI_STATUS_SUCCESS;
-}
-
-/****************************************************************************
-*
-*  Function Name: CHAL_SSPI_STATUS_t chal_sspi_set_spi_frame(
+*  Function Name: CHAL_SSPI_STATUS_t chal_sspi_set_frame(
 *                                  CHAL_HANDLE handle,
 *                                  uint32_t *frm_bitmap,
 *                                  CHAL_SSPI_PROT_t prot,
 *                                  uint32_t word_len,
-*                                  CHAL_SSPI_FRAME_EXT_t ext_setup)
+*			           uint32_t ext_bits)
 *
-*  Description: Setup a SSPI SPI frame
+*  Description: Setup a SSPI frame
 *
 ****************************************************************************/
-CHAL_SSPI_STATUS_t chal_sspi_set_spi_frame(CHAL_HANDLE handle,
-						uint32_t *frm_bitmap,
-						CHAL_SSPI_PROT_t prot,
-						uint32_t word_len,
-						CHAL_SSPI_FRAME_EXT_t ext_setup)
+CHAL_SSPI_STATUS_t chal_sspi_set_frame(CHAL_HANDLE handle,
+				       uint32_t *frm_bitmap,
+				       CHAL_SSPI_PROT_t prot,
+				       uint32_t word_len, uint32_t ext_bits)
 {
-	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *)handle;
-	uint32_t val = 0, frm_idx = 0, mode;
+	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *) handle;
+	uint32_t val = 0, frm_idx = 0, frm_idx0 = 0xFFFFFFFF, mode;
 
 	if (!handle || !frm_bitmap) {
 		chal_dprintf(CDBG_ERRO, "invalid argument\n");
 		return CHAL_SSPI_STATUS_ILLEGAL_PARA;
 	}
 	/* Mask out the unused bits of frm_bitmap */
-	*frm_bitmap &= (1 << pDevice->num_frames) - 1;
+	if (pDevice->type == SSPI_TYPE_FULL)
+		*frm_bitmap &= (1 << MAX_SSPI_FULL_FRAMES) - 1;
+	else
+		*frm_bitmap &= (1 << MAX_SSPI_LITE_FRAMES) - 1;
 
 	if (!(*frm_bitmap))
 		return CHAL_SSPI_STATUS_ILLEGAL_FRAME;
 
 	mode = CHAL_REG_READ32(pDevice->base + SSPIL_CONTROL_OFFSET) &
-		   SSPIL_CONTROL_SSPI_SLAVE_MASK;
+	    SSPIL_CONTROL_SSPI_SLAVE_MASK;
 
 	/* Get the idx of the first frame */
 	while (!(*frm_bitmap & (1 << frm_idx)))
@@ -662,44 +436,48 @@ CHAL_SSPI_STATUS_t chal_sspi_set_spi_frame(CHAL_HANDLE handle,
 	case SSPI_PROT_SPI_MODE0:
 		/*
 		 *  Default frame setup for SPI_MODE0:
-		 *  CS_SIZE word_len * 2, CS_ACTIVE 0x0, CS_IDLE_VALUE 0x1,
+		 *  CS_SIZE 0x10, CS_ACTIVE 0x0, CS_IDLE_VALUE 0x1,
 		 *  SCLK_IDLE_VALUE 0x0, TX_IDLE_VALUE 0x0, TXOEN_IDLE_VALUE 0x0
 		 */
 		val = ((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
-			(0x2 <<
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT) |
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK;
+		       SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
+		    (0x2 << SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT) |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK;
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-			pDevice->base + SSPIL_FRAME0_CS_IDLE_DEF_OFFSET),
-			val);
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+						val);
 
 		/* SCLK_START 0x2, SCLK_END word_len * 2, SCLK_RATIO 1:2 */
 		val = (0x2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
-			  (((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 1)<<
-				SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT);
+		    (((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 1) <<
+		     SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT);
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-			pDevice->base + SSPIL_FRAME0_SCLK_DEF_OFFSET),
-			val);
+						pDevice->base +
+						SSPIL_FRAME0_SCLK_DEF_OFFSET),
+						val);
 
 		/*
-		 *  TXOEN_START 0x0, TXOEN_END 0x00, TX_WORD_LENGTH word_len-1,
-		 *  TX_START 0x1 for low speed and 0x0 for high speed,
-		 *  TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
+		 *  TXOEN_START 0x0, TXOEN_END 0x00, TX_WORD_LENGTH 0x7,
+		 *  TX_START 0x0, TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
 		 */
-		val = (ext_setup == SSPI_FRAME_EXT_SPI_HS) ? 0 :
-			  (0x1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT);
-		val |= (word_len-1) <<
-				SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-			pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
-			val);
+		val = 0x1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT;
+		val |=
+		    (word_len -
+		     1) << SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				(frm_idx,
+				pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
+				val);
 
-		/* RX_WORD_LENGTH word_len-1, RX_START 0x2*/
-		val = ((word_len-1) <<
-			SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
-			(0x2 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
+		/* RX_WORD_LENGTH word_len-1, RX_START 0x2 */
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (0x2 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				(frm_idx,
 				pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
 				val);
 		*frm_bitmap = 1 << frm_idx;
@@ -711,43 +489,152 @@ CHAL_SSPI_STATUS_t chal_sspi_set_spi_frame(CHAL_HANDLE handle,
 		 * SCLK_IDLE_VALUE 0x0, TX_IDLE_VALUE 0x0, TXOEN_IDLE_VALUE 0x0
 		 */
 		val = ((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
-			(0x2 <<
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT) |
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK;
+		       SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
+		    (0x2 << SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT) |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK;
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-			pDevice->base + SSPIL_FRAME0_CS_IDLE_DEF_OFFSET),
-			val);
-
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+						val);
 		/* SCLK_START 0x2, SCLK_END word_len * 2, SCLK_RATIO 1:2 */
 		val = (0x2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
-			(((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 1) <<
-				SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT);
+		    (((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 1) <<
+		     SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT);
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_SCLK_DEF_OFFSET),
-				val);
+						pDevice->base +
+						SSPIL_FRAME0_SCLK_DEF_OFFSET),
+						val);
 
 		/* TXOEN_START 0x0, TXOEN_END 0x00, TX_WORD_LENGTH word_len-1,
 		 * TX_START 0x2 for low speed and 0x1 for high speed,
 		 * TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
 		 */
-		val = (ext_setup == SSPI_FRAME_EXT_SPI_HS) ?
-			  (0x1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) :
-			  (0x2 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT);
-		val |= (word_len - 1) <<
-			SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
+		val = (ext_bits == SSPI_FRAME_EXT_SPI_HS) ?
+		    (0x1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) :
+		    (0x2 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT);
+		val |=
+		    (word_len -
+		     1) << SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				(frm_idx,
 				pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
 				val);
 
 		/* RX_WORD_LENGTH word_len-1, RX_START 0x3 */
-		val = ((word_len - 1) <<
-			SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
-			(0x3 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
-				val);
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (0x3 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
 		*frm_bitmap = 1 << frm_idx;
+		break;
+
+	case SSPI_PROT_I2C:
+		frm_idx0 = frm_idx;
+		*frm_bitmap &= ~(1 << frm_idx++);
+		if (!(*frm_bitmap))
+			return CHAL_SSPI_STATUS_ILLEGAL_FRAME;
+
+		while (!(*frm_bitmap & (1 << frm_idx)))
+			frm_idx++;
+
+		/* Setup the Tx Frame */
+		val = (72 << SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TX_IDLE_VALUE_MASK |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TXOEN_IDLE_VALUE_MASK;
+		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx0,
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+						val);
+
+		/* SCLK_START 2, SCLK_END 70, SCLK_RATIO 1:8 */
+		val = (2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
+		    (70 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
+		    (2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx0,
+						pDevice->base +
+						SSPIL_FRAME0_SCLK_DEF_OFFSET),
+				 val);
+
+		/*
+		 *  TXOEN_START 0x0, TXOEN_END 8*8, TX_WORD_LENGTH 0x7,
+		 *  TX_START 0x0,TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
+		 */
+		val = (0 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) |
+		    (0 << SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_START_SHIFT) |
+		    ((word_len *
+		      8) << SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_END_SHIFT) |
+		    (word_len -
+		     1) << SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx0,
+				  pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
+				 val);
+
+		/* RX_WORD_LENGTH: 8, RX_START: 14 */
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (14 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx0,
+				  pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
+		*frm_bitmap = 1 << frm_idx0;
+
+		/* Setup the Rx Frame */
+		val = ((72) << SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TX_IDLE_VALUE_MASK |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TXOEN_IDLE_VALUE_MASK;
+		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+						val);
+
+		/* SCLK_START 2, SCLK_END 70, FIRST_ACTIVE_EDGE 0,
+		 * SCLK_RATIO 1:8 */
+		val = (2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
+		    (70 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
+		    (2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
+						pDevice->base +
+						SSPIL_FRAME0_SCLK_DEF_OFFSET),
+				 val);
+
+		/*
+		 *  TXOEN_START 0x0, TXOEN_END 8*8, TX_WORD_LENGTH 0x7,
+		 *  TX_START 0x0, TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
+		 */
+		val = (8 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) |
+		    (8 << SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_START_SHIFT) |
+		    (((word_len +
+		       1) *
+		      8) << SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_END_SHIFT) |
+		    ((word_len -
+		      1) << SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
+				 val);
+
+		/* RX_WORD_LENGTH: 8, RX_START: 6 */
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (6 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
+		*frm_bitmap |= 1 << frm_idx;
 		break;
 
 	case SSPI_PROT_SPI_MODE2:
@@ -756,42 +643,46 @@ CHAL_SSPI_STATUS_t chal_sspi_set_spi_frame(CHAL_HANDLE handle,
 		 * SCLK_IDLE_VALUE 0x1, TX_IDLE_VALUE 0x0, TXOEN_IDLE_VALUE 0x0
 		 */
 		val = ((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
-			(0x2 <<
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT) |
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK |
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_SCLK_IDLE_VALUE_MASK;
+		       SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
+		    (0x2 << SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT) |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_SCLK_IDLE_VALUE_MASK;
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-			pDevice->base + SSPIL_FRAME0_CS_IDLE_DEF_OFFSET),
-			val);
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+						val);
 
 		/* SCLK_START 0x2, SCLK_END word_len * 2, SCLK_RATIO 1:2 */
 		val = (0x2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
-			(((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 1)<<
-				SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT);
+		    (((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 1) <<
+		     SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT);
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_SCLK_DEF_OFFSET),
-				val);
-
+						pDevice->base +
+						SSPIL_FRAME0_SCLK_DEF_OFFSET),
+				 val);
 		/* TXOEN_START 0x0, TXOEN_END 0x00, TX_WORD_LENGTH word_len-1,
 		 * TX_START 0x1 for low speed and 0x0 for high speed,
-		 * TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
-		 */
-		val = (ext_setup == SSPI_FRAME_EXT_SPI_HS) ? 0 :
-			  (0x1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT);
-		val |= (word_len - 1) <<
-			SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
-				val);
+		 * TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0*/
+		val = (ext_bits == SSPI_FRAME_EXT_SPI_HS) ? 0 :
+		    (0x1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT);
+		val |=
+		    (word_len -
+		     1) << SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
+				 val);
 
 		/* RX_WORD_LENGTH word_len-1, RX_START 0x2 */
-		val = ((word_len - 1) <<
-			SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
-			(0x2 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
-				val);
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (0x2 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
 		*frm_bitmap = 1 << frm_idx;
 		break;
 
@@ -801,137 +692,97 @@ CHAL_SSPI_STATUS_t chal_sspi_set_spi_frame(CHAL_HANDLE handle,
 		 * SCLK_IDLE_VALUE 0x1, TX_IDLE_VALUE 0x0, TXOEN_IDLE_VALUE 0x0
 		 */
 		val = ((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
-			(0x2 <<
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT) |
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK |
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_SCLK_IDLE_VALUE_MASK;
+		       SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
+		    (0x2 << SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT) |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK |
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_SCLK_IDLE_VALUE_MASK;
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-			pDevice->base + SSPIL_FRAME0_CS_IDLE_DEF_OFFSET),
-			val);
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+						val);
 
 		/* SCLK_START 0x2, SCLK_END word_len * 2, SCLK_RATIO 1:2 */
 		val = (0x2 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
-			  (((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 1) <<
-				SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT);
+		    (((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 1) <<
+		     SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT);
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_SCLK_DEF_OFFSET),
-				val);
+						pDevice->base +
+						SSPIL_FRAME0_SCLK_DEF_OFFSET),
+				 val);
 
 		/* TXOEN_START 0x0, TXOEN_END 0x00, TX_WORD_LENGTH word_len-1,
 		 * TX_START 0x2 for low speed and 0x1 for high speed,
 		 * TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
 		 */
-		val = (ext_setup == SSPI_FRAME_EXT_SPI_HS) ?
-			  (0x1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) :
-			  (0x2 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT);
-		val |= (word_len - 1) <<
-			SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
-				val);
+		val = (ext_bits == SSPI_FRAME_EXT_SPI_HS) ?
+		    (0x1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) :
+		    (0x2 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT);
+		val |=
+		    (word_len -
+		     1) << SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
+				 val);
 
 		/* RX_WORD_LENGTH word_len-1, RX_START 0x3 */
-		val = ((word_len - 1) <<
-			SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
-			(0x3 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
-				val);
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (0x3 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
 		*frm_bitmap = 1 << frm_idx;
 		break;
 
-	default:
-		return CHAL_SSPI_STATUS_FAILURE;
-
-	}
-	return CHAL_SSPI_STATUS_SUCCESS;
-}
-
-/****************************************************************************
-*
-*  Function Name: CHAL_SSPI_STATUS_t chal_sspi_set_i2s_frame(
-*                                  CHAL_HANDLE handle,
-*                                  uint32_t *frm_bitmap,
-*                                  CHAL_SSPI_PROT_t prot,
-*                                  chal_sspi_frm_conf_t frm_conf)
-*
-*  Description: Setup a SSPI I2S frame
-*
-****************************************************************************/
-CHAL_SSPI_STATUS_t chal_sspi_set_i2s_frame(CHAL_HANDLE handle,
-				uint32_t *frm_bitmap,
-				CHAL_SSPI_PROT_t prot,
-				chal_sspi_frm_conf_t frm_conf)
-{
-	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *)handle;
-	uint32_t val = 0, frm_idx = 0, cs_len, mode;
-
-	if (!handle || !frm_bitmap) {
-		chal_dprintf(CDBG_ERRO, "invalid argument\n");
-		return CHAL_SSPI_STATUS_ILLEGAL_PARA;
-	}
-	/* Mask out the unused bits of frm_bitmap */
-	*frm_bitmap &= (1 << pDevice->num_frames) - 1;
-
-	if (!(*frm_bitmap))
-		return CHAL_SSPI_STATUS_ILLEGAL_FRAME;
-
-	mode = CHAL_REG_READ32(pDevice->base + SSPIL_CONTROL_OFFSET) &
-		   SSPIL_CONTROL_SSPI_SLAVE_MASK;
-
-	/* Get the idx of the first frame */
-	while (!(*frm_bitmap & (1 << frm_idx)))
-		frm_idx++;
-
-	cs_len = frm_conf.tx_len + frm_conf.tx_prepad_bits +
-			  frm_conf.tx_postpad_bits;
-	cs_len = ((frm_conf.rx_len + frm_conf.rx_delay_bits) > cs_len) ?
-			(frm_conf.rx_len + frm_conf.rx_delay_bits) : cs_len;
-	switch (prot) {
 	case SSPI_PROT_I2S_MODE1:
 		/*
 		 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0, CS_IDLE_VALUE: 0,
 		 *  CS_SIZE: 32, CS_ACTIVE: 0
 		 */
-		val = ((cs_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
-			((frm_conf.tx_padval ? 1 : 0) <<
-			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TX_IDLE_VALUE_SHIFT);
+		val = ((word_len + ext_bits) * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+		    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT;
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-			pDevice->base + SSPIL_FRAME0_CS_IDLE_DEF_OFFSET),
-			val);
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+						val);
 
-		/* SCLK_START: -1, SCLK_END: 33, SCLK_RATIO: 1:2*/
+		/* SCLK_START: -1, SCLK_END: 33, SCLK_RATIO: 1:2 */
 		val = (SSPI_SCLK_CYCLE_MINUS1 <<
-			SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
-			(((cs_len << 1) + 1) <<
-			SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
-			(0 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
+		       SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
+		    ((((word_len + ext_bits) << 1) + 1) <<
+		     SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
+		    (0 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_SCLK_DEF_OFFSET),
-				val);
+						pDevice->base +
+						SSPIL_FRAME0_SCLK_DEF_OFFSET),
+				 val);
 
 		/*
 		 *  TXOEN_START 0x0, TXOEN_END 0x00, TX_WORD_LENGTH 0xf,
 		 *  TX_START 0x0, TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
 		 */
-		val = (frm_conf.tx_prepad_bits <<
-			SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) |
-			((frm_conf.tx_len - 1) <<
-			SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT);
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
-				val);
+		val =
+		    (word_len -
+		     1) << SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
+				 val);
 
-		/* RX_WORD_LENGTH: 16, RX_START: 1*/
-		val = ((frm_conf.rx_len - 1) <<
-			SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
-			((1 + frm_conf.rx_delay_bits) <<
-				SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
-				val);
+		/* RX_WORD_LENGTH: 16, RX_START: 1 */
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (1 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
 		*frm_bitmap = 1 << frm_idx;
 		break;
 
@@ -939,150 +790,112 @@ CHAL_SSPI_STATUS_t chal_sspi_set_i2s_frame(CHAL_HANDLE handle,
 		if (!mode) {
 			/*
 			 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0,
-			 * CS_IDLE_VALUE: 0, CS_SIZE: 32, CS_ACTIVE: 0
+			 *  CS_IDLE_VALUE: 0, CS_SIZE: 32, CS_ACTIVE: 0
 			 */
-			val = (((cs_len) * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
-			  SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
-			  ((frm_conf.tx_padval ? 1 : 0) <<
-			  SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TX_IDLE_VALUE_SHIFT);
+			val =
+			    ((word_len +
+			      ext_bits) *
+			     SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT;
 		} else {
 			/*
 			 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0,
 			 *  CS_IDLE_VALUE: 0, CS_SIZE: 32, CS_ACTIVE: 0
 			 */
-			val = ((cs_len) * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
-			 SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT |
-			 SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_SCLK_ACTIVE_EDGE_MASK |
-			 SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK |
-			 ((frm_conf.tx_padval ? 1 : 0) <<
-			 SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TX_IDLE_VALUE_SHIFT);
+			val =
+			((word_len +
+			ext_bits) *
+			SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT |
+			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_SCLK_ACTIVE_EDGE_MASK
+			|
+			SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_IDLE_VALUE_MASK;
 		}
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-			pDevice->base + SSPIL_FRAME0_CS_IDLE_DEF_OFFSET),
-			val);
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+				 val);
 		if (!mode) {
-			/* SCLK_START: -1, SCLK_END: 35, SCLK_RATIO: 1:2*/
-			val = (0xF <<
-			 SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
-			 ((((cs_len) * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 3)
-			 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
-			  (0 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
-			CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_SCLK_DEF_OFFSET),
-				val);
+			/* SCLK_START: -1, SCLK_END: 35, SCLK_RATIO: 1:2 */
+			val =
+			    (0xF <<
+			     SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_START_SHIFT) |
+			    ((((word_len +
+				ext_bits) * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 3)
+			     << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
+			    (0 <<
+			     SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
+			CHAL_REG_WRITE32(REG_FRAME_ADDR
+					 (frm_idx,
+					  pDevice->base +
+					  SSPIL_FRAME0_SCLK_DEF_OFFSET), val);
 		}
 		/*
 		 *  TXOEN_START 0x0, TXOEN_END 0x00, TX_WORD_LENGTH 0xf,
-		 * TX_START 0x2, TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
+		 *  TX_START 0x2, TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
 		 */
-		val = ((2 + frm_conf.tx_prepad_bits) <<
-			SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) |
-			((frm_conf.tx_len - 1) <<
-			  SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT);
+		val = (2 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) |
+		    ((word_len -
+		      1) << SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
+				 val);
 
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
-				val);
-
-		/* RX_WORD_LENGTH: 16, RX_START 3*/
-		val = ((frm_conf.rx_len - 1) <<
-			SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
-			((3 + frm_conf.rx_delay_bits) <<
-				  SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
-
-		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
-				val);
+		/* RX_WORD_LENGTH: 16, RX_START 3 */
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (3 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
 		*frm_bitmap = 1 << frm_idx;
+
 		break;
 
-	default:
-		return CHAL_SSPI_STATUS_FAILURE;
-
-	}
-	return CHAL_SSPI_STATUS_SUCCESS;
-}
-
-/****************************************************************************
-*
-*  Function Name: CHAL_SSPI_STATUS_t chal_sspi_set_pcm_frame(
-*                                  CHAL_HANDLE handle,
-*                                  uint32_t *frm_bitmap,
-*                                  CHAL_SSPI_PROT_t prot,
-*                                  uint32_t word_len,
-*                                  uint32_t ext_bits)
-*
-*  Description: Setup a SSPI frame
-*
-****************************************************************************/
-CHAL_SSPI_STATUS_t chal_sspi_set_pcm_frame(CHAL_HANDLE handle,
-						uint32_t *frm_bitmap,
-						chal_sspi_frm_conf_t *frm_conf)
-{
-	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *)handle;
-	uint32_t val = 0, frm_idx = 0, i = 0, tmp, mode, cs_len;
-
-	if (!handle || !frm_bitmap) {
-		chal_dprintf(CDBG_ERRO, "invalid argument\n");
-		return CHAL_SSPI_STATUS_ILLEGAL_PARA;
-	}
-	tmp = *frm_bitmap;
-	/* Mask out the unused bits of frm_bitmap */
-	tmp &= (1 << pDevice->num_frames) - 1;
-
-	if (!tmp)
-		return CHAL_SSPI_STATUS_ILLEGAL_FRAME;
-
-	mode = CHAL_REG_READ32(pDevice->base + SSPIL_CONTROL_OFFSET) &
-		   SSPIL_CONTROL_SSPI_SLAVE_MASK;
-
-	while (tmp) {
-		/* Get the idx of the first frame */
-		if (!(tmp & (1 << frm_idx))) {
-			frm_idx++;
-			continue;
-		}
-		tmp &= ~(1 << frm_idx);
-
-		cs_len = frm_conf[i].tx_len + frm_conf[i].tx_prepad_bits +
-				 frm_conf[i].tx_postpad_bits;
-		cs_len =
-		  ((frm_conf[i].rx_len + frm_conf[i].rx_delay_bits) > cs_len) ?
-		  (frm_conf[i].rx_len + frm_conf[i].rx_delay_bits) : cs_len;
-
+	case SSPI_PROT_MONO_16B_PCM:
+	case SSPI_PROT_MONO_25B_PCM:
 		if (!mode) {
 			/*
 			 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0,
 			 *  CS_IDLE_VALUE: 0, CS_SIZE: 32, CS_ACTIVE: 2
 			 */
-			val = ((cs_len << 1) <<
-			 SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
-			 (2 <<
-			 SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT) |
-			 ((frm_conf[i].tx_padval ? 1 : 0) <<
-			  SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TX_IDLE_VALUE_SHIFT);
+			val = (((word_len + ext_bits) << 1) <<
+			       SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
+			    2 <<
+			    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT;
 		} else {
 			/*
 			 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0,
-			 * CS_IDLE_VALUE: 0, CS_SIZE: 32, CS_ACTIVE: 0
+			 *  CS_IDLE_VALUE: 0, CS_SIZE: 32, CS_ACTIVE: 0
 			 */
-			val = ((cs_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
-			 SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
-			 ((frm_conf[i].tx_padval ? 1 : 0) <<
-			 SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_TX_IDLE_VALUE_SHIFT);
+			val =
+			    ((word_len +
+			      ext_bits) *
+			     SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT;
 		}
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-			pDevice->base + SSPIL_FRAME0_CS_IDLE_DEF_OFFSET),
-			val);
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+				 val);
 
 		if (!mode) {
-			/* SCLK_START: 0, SCLK_END: 35, SCLK_RATIO: 1:2*/
-			val = ((cs_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
-			  SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
-			  (0 << SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
-			CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_SCLK_DEF_OFFSET),
-				val);
+			/* SCLK_START: 0, SCLK_END: 35, SCLK_RATIO: 1:2 */
+			val =
+			(((word_len +
+			ext_bits) *
+			SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) | (0 <<
+			SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
+			CHAL_REG_WRITE32(REG_FRAME_ADDR
+					 (frm_idx,
+					  pDevice->base +
+					  SSPIL_FRAME0_SCLK_DEF_OFFSET), val);
 		}
 
 		if (!mode) {
@@ -1091,45 +904,296 @@ CHAL_SSPI_STATUS_t chal_sspi_set_pcm_frame(CHAL_HANDLE handle,
 			 *  TX_START 0x2, TX_EXTENDED_RIGHT 0x0,
 			 *  TX_EXTENDED_LEFT 0x0
 			 */
-			val = ((2 + frm_conf[i].tx_prepad_bits) <<
-			  SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) |
-			  ((frm_conf[i].tx_len-1) <<
-			  SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT);
+			val = 2 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT |
+			    (word_len -
+			     1) <<
+			    SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
 		} else {
 			/*
-			 *  Since 2 clk cycles are required to rx/tx one bit
-			 *  of data, TXOEN_END is set to
-			 *  (word_len << 1)+2 = word_len * 2+2
+			 *  Since 2 clk cycles are required to rx/tx one bit of
+			 *  data, TXOEN_END is set to
+			 * (word_len << 1)+2 = word_len * 2+2
 			 */
-			val = ((2 + frm_conf[i].tx_prepad_bits) <<
-			  SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) |
-			  ((2 + frm_conf[i].tx_prepad_bits) <<
-			  SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_START_SHIFT) |
-			  ((((frm_conf[i].tx_len + frm_conf[i].tx_prepad_bits) *
-			  SSPI_MASTER_CLK_CYCLE_PER_BIT)+2) <<
-			  SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_END_SHIFT) |
-			  ((frm_conf[i].tx_len-1) <<
-			  SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT);
+			val = (2 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT) |
+			    (2 << SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_START_SHIFT)
+			    | (((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) + 2)
+			       << SSPIL_FRAME0_TX_DEF_FRAME0_TXOEN_END_SHIFT) |
+			    (word_len -
+			     1) <<
+			    SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
 		}
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_TX_DEF_OFFSET),
-				val);
+						pDevice->base +
+						SSPIL_FRAME0_TX_DEF_OFFSET),
+				 val);
 		if (!mode) {
-			/* RX_WORD_LENGTH: 16, RX_START 3 */
-			val = ((frm_conf[i].rx_len - 1) <<
-			  SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
-			  ((3 +  frm_conf[i].rx_delay_bits) <<
-			  SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+			/* RX_WORD_LENGTH: 16, RX_START 1 */
+			val = ((word_len - 1) <<
+			       SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT)
+			    | (3 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
 		} else {
-			val = ((frm_conf[i].rx_len - 1) <<
-			  SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
-			  ((3 +  frm_conf[i].rx_delay_bits) <<
-			  SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+			val = ((word_len - 1) <<
+			       SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT)
+			    | (3 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
 		}
 		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
-				pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
-				val);
-		i++;
+						pDevice->base +
+						SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
+		*frm_bitmap = 1 << frm_idx;
+		break;
+
+	case SSPI_PROT_STEREO_16B_PCM:
+	case SSPI_PROT_STEREO_25B_PCM:
+		/*
+		 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0, CS_IDLE_VALUE: 0,
+		 *  CS_SIZE: (16 + ext_bits)*2, CS_ACTIVE: 2
+		 */
+		if (!mode) {
+			val =
+			    (((word_len +
+			       ext_bits) *
+			      SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			     SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) | 2
+			    << SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT;
+		} else {
+			/*
+			 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0,
+			 *  CS_IDLE_VALUE: 0, CS_SIZE: (16 + ext_bits)*2,
+			 *  CS_ACTIVE: 0, SCLK_ACTIVE_EDGE: 0
+			 */
+			val =
+			    ((word_len +
+			      ext_bits) *
+			     SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT;
+		}
+		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+				 val);
+		if (!mode) {
+			/* SCLK_START: 0, SCLK_END: (16 + ext_bits)*2,
+			 * SCLK_RATIO: 1:2
+			 */
+			val =
+				(((word_len +
+				ext_bits) *
+				SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+				SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
+				(0 <<
+				SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
+			CHAL_REG_WRITE32(REG_FRAME_ADDR
+					 (frm_idx,
+					  pDevice->base +
+					  SSPIL_FRAME0_SCLK_DEF_OFFSET), val);
+		}
+		if (!mode) {
+			/*
+			 *  TXOEN_START 0x0, TXOEN_END 0x00, TX_WORD_LENGTH 0xf,
+			 *  TX_START 0x2, TX_EXTENDED_RIGHT 0x0,
+			 *  TX_EXTENDED_LEFT 0x0
+			 */
+			val = 2 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT |
+			    (word_len -
+			     1) <<
+			    SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		} else {
+			/*
+			 *  TXOEN_START 0x0, TXOEN_END 0x00,
+			 *  TX_WORD_LENGTH 0xf, TX_START 0x2,
+			 *  TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
+			 */
+			val = 1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT |
+			    (word_len -
+			     1) <<
+			    SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		}
+		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
+						pDevice->base +
+						SSPIL_FRAME0_TX_DEF_OFFSET),
+				 val);
+
+		/* RX_WORD_LENGTH: 16, RX_START 3 */
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (3 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
+
+		break;
+
+	case SSPI_PROT_3CHAN_16B_TDM_PCM:
+	case SSPI_PROT_4CHAN_16B_TDM_PCM:
+		frm_idx0 = frm_idx;
+		*frm_bitmap &= ~(1 << frm_idx++);
+		if (!(*frm_bitmap) && ext_bits)
+			return CHAL_SSPI_STATUS_ILLEGAL_FRAME;
+		else if (ext_bits) {
+			while (!(*frm_bitmap & (1 << frm_idx)))
+				frm_idx++;
+		}
+
+		/*
+		 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0, CS_IDLE_VALUE: 0,
+		 *  CS_SIZE: 64, CS_ACTIVE: 2
+		 */
+		if (!mode) {
+			val = ((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			       SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) |
+			    2 <<
+			    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT;
+		} else {
+			/*
+			 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0,
+			 *  CS_IDLE_VALUE: 0, CS_SIZE: 64, CS_ACTIVE: 0,
+			 *  SCLK_ACTIVE_EDGE: 0
+			 */
+			val = (word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT;
+		}
+		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx0,
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+				 val);
+		if (!mode) {
+			/* SCLK_START: 0, SCLK_END: 35, SCLK_RATIO: 1:2 */
+			val = ((word_len * SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			       SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
+			    (0 <<
+			     SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
+			CHAL_REG_WRITE32(REG_FRAME_ADDR
+					 (frm_idx0,
+					  pDevice->base +
+					  SSPIL_FRAME0_SCLK_DEF_OFFSET), val);
+		}
+		if (!mode) {
+			/*
+			 *  TXOEN_START 0x0, TXOEN_END 0x00,
+			 *  TX_WORD_LENGTH 0xf, TX_START 0x2,
+			 *  TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
+			 */
+			val = 2 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT |
+			    (word_len -
+			     1) <<
+			    SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		} else {
+			/*
+			 *  TXOEN_START 0x0, TXOEN_END 0x00,
+			 *  TX_WORD_LENGTH 0xf, TX_START 0x2,
+			 *  TX_EXTENDED_RIGHT 0x0, TX_EXTENDED_LEFT 0x0
+			 */
+			val = 1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT |
+			    (word_len -
+			     1) <<
+			    SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		}
+		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx0,
+						pDevice->base +
+						SSPIL_FRAME0_TX_DEF_OFFSET),
+				 val);
+
+		/* RX_WORD_LENGTH: 16, RX_START 3 */
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (3 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx0,
+				  pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
+		if (!ext_bits)
+			break;
+
+		/*
+		 *  Setup one more frame if need to add the dummy bits at the
+		 *  end of frame
+		 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0, CS_IDLE_VALUE: 0,
+		 *  CS_SIZE: (word_len + ext_bits)*2, CS_ACTIVE: 2
+		 */
+		if (!mode) {
+			val =
+			    (((word_len +
+			       ext_bits) *
+			      SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			     SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT) | 2
+			    << SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_ACTIVE_SHIFT;
+		} else {
+			/*
+			 *  TXOEN_IDLE_VALUE: 0, TX_IDLE_VALUE: 0,
+			 *  CS_IDLE_VALUE: 0, CS_SIZE: (word_len + ext_bits)*2,
+			 *  CS_ACTIVE: 0, SCLK_ACTIVE_EDGE: 0
+			 */
+			val =
+			    ((word_len +
+			      ext_bits) *
+			     SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+			    SSPIL_FRAME0_CS_IDLE_DEF_FRAME0_CS_SIZE_SHIFT;
+		}
+		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
+						pDevice->base +
+						SSPIL_FRAME0_CS_IDLE_DEF_OFFSET)
+						,
+				 val);
+		if (!mode) {
+			/* SCLK_START: 0, SCLK_END: 35, SCLK_RATIO: 1:2 */
+			val =
+				(((word_len +
+				ext_bits) *
+				SSPI_MASTER_CLK_CYCLE_PER_BIT) <<
+				SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_END_SHIFT) |
+				(0 <<
+				SSPIL_FRAME0_SCLK_DEF_FRAME0_SCLK_RATIO_SHIFT);
+			CHAL_REG_WRITE32(REG_FRAME_ADDR
+					 (frm_idx,
+					  pDevice->base +
+					  SSPIL_FRAME0_SCLK_DEF_OFFSET), val);
+		}
+		if (!mode) {
+			/*
+			 *  TXOEN_START 0x0, TXOEN_END 0x00, TX_WORD_LENGTH 0xf,
+			 *  TX_START 0x2, TX_EXTENDED_RIGHT 0x0,
+			 *  TX_EXTENDED_LEFT 0x0
+			 */
+			val = 2 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT |
+			    (word_len -
+			     1) <<
+			    SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		} else {
+			/*
+			 *  TXOEN_START 0x0, TXOEN_END 0x00, TX_WORD_LENGTH 0xf,
+			 *  TX_START 0x2, TX_EXTENDED_RIGHT 0x0,
+			 *  TX_EXTENDED_LEFT 0x0
+			 */
+			val = 1 << SSPIL_FRAME0_TX_DEF_FRAME0_TX_START_SHIFT |
+			    (word_len -
+			     1) <<
+			    SSPIL_FRAME0_TX_DEF_FRAME0_TX_WORD_LENGTH_SHIFT;
+		}
+		CHAL_REG_WRITE32(REG_FRAME_ADDR(frm_idx,
+						pDevice->base +
+						SSPIL_FRAME0_TX_DEF_OFFSET),
+				 val);
+
+		/* RX_WORD_LENGTH: 16, RX_START 3 */
+		val =
+		    ((word_len -
+		      1) << SSPIL_FRAME0_RX_DEF_FRAME0_RX_WORD_LENGTH_SHIFT) |
+		    (3 << SSPIL_FRAME0_RX_DEF_FRAME0_RX_START_SHIFT);
+		CHAL_REG_WRITE32(REG_FRAME_ADDR
+				 (frm_idx,
+				  pDevice->base + SSPIL_FRAME0_RX_DEF_OFFSET),
+				 val);
+		break;
+
+	default:
+		return CHAL_SSPI_STATUS_FAILURE;
+
 	}
 	return CHAL_SSPI_STATUS_SUCCESS;
 }
@@ -1156,8 +1220,13 @@ CHAL_SSPI_STATUS_t chal_sspi_set_pattern(CHAL_HANDLE handle,
 		return CHAL_SSPI_STATUS_ILLEGAL_HANDLE;
 	}
 
-	if (patt_idx >= MAX_SSPI_FULL_PATTERNS)
-		return CHAL_SSPI_STATUS_ILLEGAL_INDEX;
+	if (pDevice->type == SSPI_TYPE_FULL) {
+		if (patt_idx >= MAX_SSPI_FULL_PATTERNS)
+			return CHAL_SSPI_STATUS_ILLEGAL_INDEX;
+	} else {
+		if (patt_idx >= MAX_SSPI_LITE_PATTERNS)
+			return CHAL_SSPI_STATUS_ILLEGAL_INDEX;
+	}
 
 	switch (type) {
 	case CHAL_SSPI_PATT_TYPE_I2C_STD_START:
@@ -1339,7 +1408,12 @@ CHAL_SSPI_STATUS_t chal_sspi_set_idle_state(CHAL_HANDLE handle,
 
 	case SSPI_PROT_I2S_MODE1:
 	case SSPI_PROT_I2S_MODE2:
-	case SSPI_PROT_DEFAULT_PCM:
+	case SSPI_PROT_MONO_16B_PCM:
+	case SSPI_PROT_MONO_25B_PCM:
+	case SSPI_PROT_STEREO_16B_PCM:
+	case SSPI_PROT_STEREO_25B_PCM:
+	case SSPI_PROT_3CHAN_16B_TDM_PCM:
+	case SSPI_PROT_4CHAN_16B_TDM_PCM:
 		/*
 		 *  Default set for I2S_MODE0:
 		 *  STATE_MACHINE_CONTROL:
@@ -1383,8 +1457,13 @@ CHAL_SSPI_STATUS_t chal_sspi_set_sequence(CHAL_HANDLE handle,
 		return CHAL_SSPI_STATUS_ILLEGAL_HANDLE;
 	}
 
-	if (seq_idx >= pDevice->num_seqs)
+	if (pDevice->type == SSPI_TYPE_FULL) {
+		if (seq_idx >= MAX_SSPI_FULL_SEQUENCES)
 			return CHAL_SSPI_STATUS_ILLEGAL_INDEX;
+	} else {
+		if (seq_idx >= MAX_SSPI_LITE_SEQUENCES)
+			return CHAL_SSPI_STATUS_ILLEGAL_INDEX;
+	}
 
 	val = 0;
 	val = (seq_conf->opcode << SSPIL_SEQUENCE_0_SEQ0_OPCODE_SHIFT) |
@@ -1418,7 +1497,12 @@ CHAL_SSPI_STATUS_t chal_sspi_set_sequence(CHAL_HANDLE handle,
 	case SSPI_PROT_SPI_MODE3:
 	case SSPI_PROT_I2S_MODE1:
 	case SSPI_PROT_I2S_MODE2:
-	case SSPI_PROT_DEFAULT_PCM:
+	case SSPI_PROT_MONO_16B_PCM:
+	case SSPI_PROT_MONO_25B_PCM:
+	case SSPI_PROT_STEREO_16B_PCM:
+	case SSPI_PROT_STEREO_25B_PCM:
+	case SSPI_PROT_3CHAN_16B_TDM_PCM:
+	case SSPI_PROT_4CHAN_16B_TDM_PCM:
 		/*
 		 *  Default sequence setup for SPI_MODE0:
 		 *  SEQ0_CLK_IDLE: 0, SEQ0_TXOEN_ACTIVE: 0
@@ -1460,8 +1544,13 @@ CHAL_SSPI_STATUS_t chal_sspi_set_task(CHAL_HANDLE handle,
 		return CHAL_SSPI_STATUS_ILLEGAL_HANDLE;
 	}
 
-	if (task_idx >= pDevice->num_tasks)
+	if (pDevice->type == SSPI_TYPE_FULL) {
+		if (task_idx >= MAX_SSPI_FULL_TASKS)
 			return CHAL_SSPI_STATUS_ILLEGAL_INDEX;
+	} else {
+		if (task_idx >= MAX_SSPI_LITE_TASKS)
+			return CHAL_SSPI_STATUS_ILLEGAL_INDEX;
+	}
 
 	switch (prot) {
 	case SSPI_PROT_SPI_MODE0:
@@ -1492,7 +1581,12 @@ CHAL_SSPI_STATUS_t chal_sspi_set_task(CHAL_HANDLE handle,
 
 	case SSPI_PROT_I2S_MODE1:
 	case SSPI_PROT_I2S_MODE2:
-	case SSPI_PROT_DEFAULT_PCM:
+	case SSPI_PROT_MONO_16B_PCM:
+	case SSPI_PROT_MONO_25B_PCM:
+	case SSPI_PROT_STEREO_16B_PCM:
+	case SSPI_PROT_STEREO_25B_PCM:
+	case SSPI_PROT_3CHAN_16B_TDM_PCM:
+	case SSPI_PROT_4CHAN_16B_TDM_PCM:
 		/* TX_TXOEN: 0, SCLK_SCLKOEN: 0 */
 		msb_val |= SSPIL_TASK0_DESC_MSB_TASK0_RESET_REPEATCOUNTER_MASK |
 		    SSPIL_TASK0_DESC_MSB_TASK0_ENABLE_MASK;
@@ -1696,7 +1790,7 @@ CHAL_SSPI_STATUS_t chal_sspi_get_clk_src_select(CHAL_HANDLE handle,
 *  Description: Set the CAPH clock generation paramters
 *
 ****************************************************************************/
-static CHAL_SSPI_STATUS_t chal_sspi_set_caph_clk_gen(CHAL_HANDLE handle,
+CHAL_SSPI_STATUS_t chal_sspi_set_caph_clk_gen(CHAL_HANDLE handle,
 					      CHAL_SSPI_CAPH_CLK_TRIG_t trig,
 					      uint32_t num_cycle_edge,
 					      uint32_t num_clk_edge,
@@ -1723,7 +1817,6 @@ static CHAL_SSPI_STATUS_t chal_sspi_set_caph_clk_gen(CHAL_HANDLE handle,
 	return CHAL_SSPI_STATUS_SUCCESS;
 }
 
-#if 0
 /****************************************************************************
 *
 *  Function Name: CHAL_SSPI_STATUS_t chal_sspi_get_caph_clk_gen(
@@ -1736,7 +1829,7 @@ static CHAL_SSPI_STATUS_t chal_sspi_set_caph_clk_gen(CHAL_HANDLE handle,
 *  Description: get the CAPH clock generation paramters
 *
 ****************************************************************************/
-static CHAL_SSPI_STATUS_t chal_sspi_get_caph_clk_gen(CHAL_HANDLE handle,
+CHAL_SSPI_STATUS_t chal_sspi_get_caph_clk_gen(CHAL_HANDLE handle,
 					      CHAL_SSPI_CAPH_CLK_TRIG_t *trig,
 					      uint32_t *num_cycle_edge,
 					      uint32_t *num_clk_edge,
@@ -1763,82 +1856,102 @@ static CHAL_SSPI_STATUS_t chal_sspi_get_caph_clk_gen(CHAL_HANDLE handle,
 			  SSPIL_CLKGEN_CLKGEN_RESYNC_ENABLE_MASK);
 	return CHAL_SSPI_STATUS_SUCCESS;
 }
-#endif
 
 /****************************************************************************
 *
-*  Function Name: CHAL_SSPI_STATUS_t chal_sspi_set_caph_clk(
+*  Function Name: CHAL_SSPI_STATUS_t chal_sspi_set_caph_clk_gen(
 *                                            CHAL_HANDLE handle,
-*                                            uint32_t sample_rate,
-*                                            uint32_t sample_len)
+*                                            CHAL_SSPI_CAPH_CLK_TRIG_t trig,
+*                                            uint32_t word_len,
+*                                            uint32_t num_chan)
 *
 *  Description: Set the CAPH clock generation paramters
 *
 ****************************************************************************/
 CHAL_SSPI_STATUS_t chal_sspi_set_caph_clk(CHAL_HANDLE handle,
-							  uint32_t sample_rate,
-							  uint32_t sample_len)
+					  CHAL_SSPI_CAPH_CLK_TRIG_t trig,
+					  uint32_t word_len, uint32_t num_chan)
 {
 	uint32_t num_cycle;
-	CHAL_SSPI_CAPH_CLK_TRIG_t trig;
 
 	if (!handle) {
 		chal_dprintf(CDBG_ERRO, "invalid argument\n");
 		return CHAL_SSPI_STATUS_ILLEGAL_HANDLE;
 	}
 
-	switch (sample_rate) {
-	case 4000:
-		trig = SSPI_CAPH_CLK_TRIG_4kHz;
-		break;
-	case 8000:
-		trig = SSPI_CAPH_CLK_TRIG_8kHz;
-		break;
-	case 12000:
-		trig = SSPI_CAPH_CLK_TRIG_12kHz;
-		break;
-	case 16000:
-		trig = SSPI_CAPH_CLK_TRIG_16kHz;
-		break;
-	case 24000:
-		trig = SSPI_CAPH_CLK_TRIG_24kHz;
-		break;
-	case 32000:
-		trig = SSPI_CAPH_CLK_TRIG_32kHz;
-		break;
-	case 48000:
-		trig = SSPI_CAPH_CLK_TRIG_48kHz;
-		break;
-	case 96000:
-		trig = SSPI_CAPH_CLK_TRIG_96kHz;
-		break;
-	case 44100:
-		trig = SSPI_CAPH_CLK_TRIG_44DOT1kHz;
-		break;
-	case 22050:
-		trig = SSPI_CAPH_CLK_TRIG_22DOT05kHz;
-		break;
-	case 11025:
-		trig = SSPI_CAPH_CLK_TRIG_11DOT025kHz;
-		break;
-	default:
+	if (word_len > CHAL_SSPI_MAX_WORD_LEN)
 		return CHAL_SSPI_STATUS_ILLEGAL_PARA;
-	}
 
-	if (trig == SSPI_CAPH_CLK_TRIG_44DOT1kHz) {
+	if (num_chan > CHAL_SSPI_MAX_CHANNELS)
+		return CHAL_SSPI_STATUS_ILLEGAL_PARA;
+
+	switch (trig) {
+	case SSPI_CAPH_CLK_TRIG_4kHz:
+		num_cycle =
+		    CHAL_SSPI_CAPH_CLOCK_RATE / (4000 * word_len * num_chan);
+		break;
+
+	case SSPI_CAPH_CLK_TRIG_8kHz:
+		num_cycle =
+		    CHAL_SSPI_CAPH_CLOCK_RATE / (8000 * word_len * num_chan);
+		break;
+
+	case SSPI_CAPH_CLK_TRIG_12kHz:
+		num_cycle =
+		    CHAL_SSPI_CAPH_CLOCK_RATE / (12000 * word_len * num_chan);
+		break;
+
+	case SSPI_CAPH_CLK_TRIG_16kHz:
+		num_cycle =
+		    CHAL_SSPI_CAPH_CLOCK_RATE / (16000 * word_len * num_chan);
+		break;
+
+	case SSPI_CAPH_CLK_TRIG_24kHz:
+		num_cycle =
+		    CHAL_SSPI_CAPH_CLOCK_RATE / (24000 * word_len * num_chan);
+		break;
+
+	case SSPI_CAPH_CLK_TRIG_32kHz:
+		num_cycle =
+		    CHAL_SSPI_CAPH_CLOCK_RATE / (32000 * word_len * num_chan);
+		break;
+
+	case SSPI_CAPH_CLK_TRIG_48kHz:
+		num_cycle =
+		    CHAL_SSPI_CAPH_CLOCK_RATE / (48000 * word_len * num_chan);
+		break;
+
+	case SSPI_CAPH_CLK_TRIG_96kHz:
+		num_cycle =
+		    CHAL_SSPI_CAPH_CLOCK_RATE / (96000 * word_len * num_chan);
+		break;
+
+	case SSPI_CAPH_CLK_TRIG_44DOT1kHz:
 		/*
 		 *  Since the SSPI issue, to get the correct 44.1K sample rate,
 		 *  num_cycle need be set 1 less than the normal value.
 		 */
 		num_cycle = CHAL_SSPI_CAPH_CLOCK_RATE /
-				(sample_rate * sample_len) - 1;
-	} else
-		num_cycle = CHAL_SSPI_CAPH_CLOCK_RATE /
-				(sample_rate * sample_len);
+		    (44100 * word_len * num_chan) - 1;
+		break;
+
+	case SSPI_CAPH_CLK_TRIG_22DOT05kHz:
+		num_cycle =
+		    CHAL_SSPI_CAPH_CLOCK_RATE / (22050 * word_len * num_chan);
+		break;
+
+	case SSPI_CAPH_CLK_TRIG_11DOT025kHz:
+		num_cycle =
+		    CHAL_SSPI_CAPH_CLOCK_RATE / (11025 * word_len * num_chan);
+		break;
+
+	default:
+		return CHAL_SSPI_STATUS_ILLEGAL_PARA;
+	}
 
 	chal_sspi_set_caph_clk_gen(handle, trig,
 				   num_cycle / 2 - 1,
-				   sample_len * 2 - 1, 1);
+				   word_len * 2 * num_chan - 1, 1);
 
 	return CHAL_SSPI_STATUS_SUCCESS;
 }
@@ -3127,22 +3240,22 @@ uint32_t chal_sspi_read_data(CHAL_HANDLE handle,
 			     CHAL_SSPI_PROT_t prot, uint8_t *buf, uint32_t size)
 {
 	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *) handle;
-	uint32_t tmp = size, val, width = SPI_FIFO_DATA_RWSIZE_RESERVED;
-	uint32_t ctlbase;
-	uint32_t entbase;
 
-	ctlbase = REG_FIFORX_CTL_ADDR(fifo_id,
-				      pDevice->base +
-				      SSPIL_FIFORX_0_CONTROL_OFFSET);
-	entbase = REG_FIFO_ENTRYRX_ADDR(fifo_id,
-					pDevice->base +
-					SSPIL_FIFO_ENTRY0RX_OFFSET);
+	uint32_t tmp = size, val, width = SPI_FIFO_DATA_RWSIZE_RESERVED;
+	uint32_t ctlbase = 0;
+        uint32_t entbase = 0;
 
 	if (!handle || !buf || (fifo_id > SSPI_FIFO_ID_RX3)) {
 		chal_dprintf(CDBG_ERRO, "invalid argument\n");
 		return 0;
 	}
 
+	ctlbase = REG_FIFORX_CTL_ADDR(fifo_id,
+					       pDevice->base +
+					       SSPIL_FIFORX_0_CONTROL_OFFSET);
+	entbase = REG_FIFO_ENTRYRX_ADDR(fifo_id,
+						 pDevice->base +
+						 SSPIL_FIFO_ENTRY0RX_OFFSET);
 	switch (prot) {
 	case SSPI_PROT_SPI_MODE0:
 	case SSPI_PROT_SPI_MODE1:
@@ -3150,7 +3263,12 @@ uint32_t chal_sspi_read_data(CHAL_HANDLE handle,
 	case SSPI_PROT_SPI_MODE3:
 	case SSPI_PROT_I2S_MODE1:
 	case SSPI_PROT_I2S_MODE2:
-	case SSPI_PROT_DEFAULT_PCM:
+	case SSPI_PROT_MONO_16B_PCM:
+	case SSPI_PROT_MONO_25B_PCM:
+	case SSPI_PROT_STEREO_16B_PCM:
+	case SSPI_PROT_STEREO_25B_PCM:
+	case SSPI_PROT_3CHAN_16B_TDM_PCM:
+	case SSPI_PROT_4CHAN_16B_TDM_PCM:
 		while (tmp > 3) {
 			if (width != SPI_FIFO_DATA_RWSIZE_32) {
 				val = CHAL_REG_READ32(ctlbase);
@@ -3320,7 +3438,12 @@ uint32_t chal_sspi_write_data(CHAL_HANDLE handle,
 	case SSPI_PROT_SPI_MODE3:
 	case SSPI_PROT_I2S_MODE1:
 	case SSPI_PROT_I2S_MODE2:
-	case SSPI_PROT_DEFAULT_PCM:
+	case SSPI_PROT_MONO_16B_PCM:
+	case SSPI_PROT_MONO_25B_PCM:
+	case SSPI_PROT_STEREO_16B_PCM:
+	case SSPI_PROT_STEREO_25B_PCM:
+	case SSPI_PROT_3CHAN_16B_TDM_PCM:
+	case SSPI_PROT_4CHAN_16B_TDM_PCM:
 		while (tmp > 3) {
 			if (width != SPI_FIFO_DATA_RWSIZE_32) {
 				val = CHAL_REG_READ32(ctlbase);
@@ -3435,15 +3558,17 @@ CHAL_SSPI_STATUS_t chal_sspi_read_fifo(CHAL_HANDLE handle,
 				       uint32_t *data)
 {
 	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *) handle;
-	uint32_t entbase;
+	uint32_t entbase = 0;
 
 	if (!handle || !data || (fifo_id > SSPI_FIFO_ID_RX3)) {
 		chal_dprintf(CDBG_ERRO, "invalid argument\n");
 		return CHAL_SSPI_STATUS_ILLEGAL_PARA;
 	}
+
 	entbase = REG_FIFO_ENTRYRX_ADDR(fifo_id,
-					pDevice->base +
-					SSPIL_FIFO_ENTRY0RX_OFFSET);
+						 pDevice->base +
+						 SSPIL_FIFO_ENTRY0RX_OFFSET);
+
 	*data = CHAL_REG_READ32(entbase);
 	return CHAL_SSPI_STATUS_SUCCESS;
 
@@ -3451,7 +3576,7 @@ CHAL_SSPI_STATUS_t chal_sspi_read_fifo(CHAL_HANDLE handle,
 
 /****************************************************************************
 *
-*  Function Name: uint32_t chal_sspi_write_fifo(
+*  Function Name: uint32_t chal_sspi_write_data(
 *                                  CHAL_HANDLE handle,
 *                                  CHAL_SSPI_FIFO_ID_t fifo_id,
 *                                  uint32_t data)
@@ -3464,15 +3589,16 @@ CHAL_SSPI_STATUS_t chal_sspi_write_fifo(CHAL_HANDLE handle,
 					uint32_t data)
 {
 	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *) handle;
-	uint32_t entbase;
+	uint32_t entbase = 0;
 
 	if (!handle || (fifo_id < SSPI_FIFO_ID_TX0)) {
 		chal_dprintf(CDBG_ERRO, "invalid argument\n");
 		return CHAL_SSPI_STATUS_ILLEGAL_PARA;
 	}
-	entbase = REG_FIFO_ENTRYTX_ADDR(fifo_id - SSPI_FIFO_ID_TX0,
-					pDevice->base +
-					SSPIL_FIFO_ENTRY0TX_OFFSET);
+
+	entbase = REG_FIFO_ENTRYTX_ADDR(fifo_id,
+				 pDevice->base + SSPIL_FIFO_ENTRY0TX_OFFSET);
+
 	CHAL_REG_WRITE32(entbase, data);
 	return CHAL_SSPI_STATUS_SUCCESS;
 
@@ -3654,8 +3780,13 @@ CHAL_SSPI_STATUS_t chal_sspi_enable_task(CHAL_HANDLE handle,
 		return CHAL_SSPI_STATUS_ILLEGAL_HANDLE;
 	}
 
-	if (task_idx >= pDevice->num_tasks)
-		return CHAL_SSPI_STATUS_ILLEGAL_INDEX;
+	if (pDevice->type == SSPI_TYPE_FULL) {
+		if (task_idx >= MAX_SSPI_FULL_TASKS)
+			return CHAL_SSPI_STATUS_ILLEGAL_INDEX;
+	} else {
+		if (task_idx >= MAX_SSPI_LITE_TASKS)
+			return CHAL_SSPI_STATUS_ILLEGAL_INDEX;
+	}
 
 	val = 0;
 	val = CHAL_REG_READ32(REG_TASK_ADDR(task_idx,
@@ -3697,311 +3828,4 @@ CHAL_SSPI_STATUS_t chal_sspi_enable_scheduler(CHAL_HANDLE handle,
 		SSPIL_SCHEDULER_CONTROL_SCH_ENABLE_MASK);
 	CHAL_REG_WRITE32(pDevice->base + SSPIL_SCHEDULER_CONTROL_OFFSET, val);
 	return CHAL_SSPI_STATUS_SUCCESS;
-}
-
-/*
- * ******************************************************************************
- *
- *  Function Name:  chal_sspi_dump_registers
- *
- *  Description:    Function to dump SSPI registers
- *
- * ******************************************************************************
- */
-void chal_sspi_dump_registers(CHAL_HANDLE handle)
-{
-	CHAL_SSPI_HANDLE_t *pDevice = (CHAL_SSPI_HANDLE_t *) handle;
-
-	if (!handle) {
-		chal_dprintf(CDBG_ERRO, "invalid argument\n");
-		return;
-	}
-
-	chal_dprintf(CDBG_ERRO, "\nDump SSPI registers:\n");
-	chal_dprintf(CDBG_INFO, "CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "CONFIGURATION_CHECK %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_CONFIGURATION_CHECK_OFFSET));
-	chal_dprintf(CDBG_INFO, "INTERRUPT_STATUS %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_INTERRUPT_STATUS_OFFSET));
-	chal_dprintf(CDBG_INFO, "INTERRUPT_ENABLE %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_INTERRUPT_ENABLE_OFFSET));
-	chal_dprintf(CDBG_INFO, "DETAIL_INTERRUPT_STATUS %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_DETAIL_INTERRUPT_STATUS_OFFSET));
-	chal_dprintf(CDBG_INFO, "INTERRUPT_ERROR_ENABLE %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_INTERRUPT_ERROR_ENABLE_OFFSET));
-	chal_dprintf(CDBG_INFO, "SCHEDULER_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_SCHEDULER_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "SEQUENCE_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_SEQUENCE_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "STATE_MACHINE_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_STATE_MACHINE_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "STATE_MACHINE_TIMEOUT %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_STATE_MACHINE_TIMEOUT_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFO_SHARING %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFO_SHARING_OFFSET));
-	chal_dprintf(CDBG_INFO, "CLKDIV %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_CLKDIV_OFFSET));
-	chal_dprintf(CDBG_INFO, "CLKGEN %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_CLKGEN_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "FIFOTX_0_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_0_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFOTX_0_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_0_THRESHOLD_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_0_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_0_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_0_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_0_THRESHOLD_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "FIFOTX_1_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_1_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFOTX_1_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_1_THRESHOLD_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_1_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_1_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_1_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_1_THRESHOLD_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "FIFOTX_2_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_2_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFOTX_2_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_2_THRESHOLD_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_2_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_2_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_2_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_2_THRESHOLD_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "FIFOTX_3_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_3_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFOTX_3_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_3_THRESHOLD_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_3_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_3_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_3_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_3_THRESHOLD_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "DMA_RX0_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_DMA_RX0_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "DMA_TX0_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_DMA_TX0_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "DMA_RX1_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_DMA_RX1_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "DMA_TX1_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_DMA_TX1_CONTROL_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "FIFOTX_0_PIO_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_0_PIO_THRESHOLD_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFOTX_1_PIO_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_1_PIO_THRESHOLD_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFOTX_2_PIO_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_2_PIO_THRESHOLD_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFOTX_3_PIO_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFOTX_3_PIO_THRESHOLD_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "FIFORX_0_PIO_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_0_PIO_THRESHOLD_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_1_PIO_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_1_PIO_THRESHOLD_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_2_PIO_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_2_PIO_THRESHOLD_OFFSET));
-	chal_dprintf(CDBG_INFO, "FIFORX_3_PIO_THRESHOLD %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FIFORX_3_PIO_THRESHOLD_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "PATTERN_0_SCLK %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_0_SCLK_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_0_CS %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_0_CS_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_0_TX %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_0_TX_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_0_TXOEN %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_0_TXOEN_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "PATTERN_1_SCLK %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_1_SCLK_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_1_CS %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_1_CS_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_1_TX %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_1_TX_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_1_TXOEN %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_1_TXOEN_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "PATTERN_2_SCLK %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_2_SCLK_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_2_CS %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_2_CS_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_2_TX %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_2_TX_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_2_TXOEN %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_2_TXOEN_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "PATTERN_3_SCLK %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_3_SCLK_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_3_CS %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_3_CS_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_3_TX %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_3_TX_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_3_TXOEN %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_3_TXOEN_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "TASK0_DESC_MSB %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_TASK0_DESC_MSB_OFFSET));
-	chal_dprintf(CDBG_INFO, "TASK0_DESC_LSB %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_TASK0_DESC_LSB_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "TASK1_DESC_MSB %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_TASK1_DESC_MSB_OFFSET));
-	chal_dprintf(CDBG_INFO, "TASK1_DESC_LSB %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_TASK1_DESC_LSB_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "PATTERN_0_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_0_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_1_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_1_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_2_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_2_CONTROL_OFFSET));
-	chal_dprintf(CDBG_INFO, "PATTERN_3_CONTROL %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_PATTERN_3_CONTROL_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "SEQUENCE_0 %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_SEQUENCE_0_OFFSET));
-	chal_dprintf(CDBG_INFO, "SEQUENCE_1 %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_SEQUENCE_1_OFFSET));
-	chal_dprintf(CDBG_INFO, "SEQUENCE_2 %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_SEQUENCE_2_OFFSET));
-	chal_dprintf(CDBG_INFO, "SEQUENCE_3 %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_SEQUENCE_3_OFFSET));
-	chal_dprintf(CDBG_INFO, "SEQUENCE_4 %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_SEQUENCE_4_OFFSET));
-	chal_dprintf(CDBG_INFO, "SEQUENCE_5 %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_SEQUENCE_5_OFFSET));
-	chal_dprintf(CDBG_INFO, "SEQUENCE_6 %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_SEQUENCE_6_OFFSET));
-	chal_dprintf(CDBG_INFO, "SEQUENCE_7 %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_SEQUENCE_7_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "FRAME0_CS_IDLE_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME0_CS_IDLE_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME0_SCLK_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME0_SCLK_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME0_TX_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME0_TX_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME0_RX_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME0_RX_DEF_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "FRAME1_CS_IDLE_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME1_CS_IDLE_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME1_SCLK_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME1_SCLK_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME1_TX_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME1_TX_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME1_RX_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME1_RX_DEF_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "FRAME2_CS_IDLE_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME2_CS_IDLE_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME2_SCLK_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME2_SCLK_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME2_TX_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME2_TX_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME2_RX_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME2_RX_DEF_OFFSET));
-
-	chal_dprintf(CDBG_INFO, "FRAME3_CS_IDLE_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME3_CS_IDLE_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME3_SCLK_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME3_SCLK_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME3_TX_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME3_TX_DEF_OFFSET));
-	chal_dprintf(CDBG_INFO, "FRAME3_RX_DEF %08x\n",
-		CHAL_REG_READ32(pDevice->base +
-				SSPIL_FRAME3_RX_DEF_OFFSET));
 }
