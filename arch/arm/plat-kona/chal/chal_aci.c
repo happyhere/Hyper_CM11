@@ -27,8 +27,9 @@
 #include <plat/chal/chal_common.h>
 #include <plat/chal/chal_aci.h>
 
+
 #include <mach/rdb/brcm_rdb_sysmap.h>
-#include <mach/rdb/brcm_rdb_util.h>
+#include <chal/chal_util.h>
 #include <mach/rdb/brcm_rdb_aci.h>
 #include <mach/rdb/brcm_rdb_auxmic.h>
 #include <mach/rdb/brcm_rdb_audioh.h>
@@ -59,8 +60,8 @@
  * protected  under undefined macro.
  */
 
-#define ADC_FS_BIG_SMALL_B_LOW_RANGE 0	/*Sets ADC low scale: 0 = 1150 mV */
-#define ADC_FS_BIG_SMALL_B_FULL_RANGE 1	/*Sets ADC full scale: 1= 2300 mV */
+#define ADC_FS_BIG_SMALL_B_LOW_RANGE 0 /*Sets ADC low scale: 0 = 1150 mV*/
+#define ADC_FS_BIG_SMALL_B_FULL_RANGE 1 /*Sets ADC full scale: 1= 2300 mV*/
 
 #define ACI_TX_INV_SETTING  ((~ACI_ACI_TX_INV_ACI_TX_INV_CMD_INVETED) & \
 						ACI_ACI_TX_INV_ACI_TX_INV_MASK)
@@ -109,27 +110,27 @@ BRCM_WRITE_REG(KONA_ACI_VA, ACI_COMR, reg); \
 /*
  * ACI Block Register write delay
  */
-#define HW_ACI_REGISTER_WRITE_SETTLE_DELAY  1	/* 3 cycles @ 32768 Hz = 92us */
+#define HW_ACI_REGISTER_WRITE_SETTLE_DELAY  1     /* 3 cycles @ 32768 Hz = 92us */
 
 /* The loop below will take around 200us */
 #define HW_ACI_REGISTER_WRITE_SETTLE        do { \
 cUInt32 i;  \
-volatile cUInt32 j = 0;  \
+volatile cUInt32 j;  \
+	j = 0; \
 	for (i = 0; i < 1000; i++)  {\
 		j += BRCM_READ_REG_FIELD(KONA_ACI_VA, \
 			ACI_COMP_DOUT, COMP1_DOUT); }  \
 } while (0)
 
-static void chal_aci_block_ctrl_arg(CHAL_HANDLE handle,
-				    CHAL_ACI_block_action_t action,
-				    CHAL_ACI_block_id_t id, va_list argp);
-static cVoid chal_aci_init_aci(cUInt32 baseAddr);
+
+static void chal_aci_block_ctrl_arg( CHAL_HANDLE handle, CHAL_ACI_block_action_t action, CHAL_ACI_block_id_t id, va_list argp );
+static cVoid chal_aci_init_aci(void __iomem *baseAddr);
 
 /*=============================================================================
 * Local Variables
 *=============================================================================
 */
-static volatile cUInt8 *base_addr;
+static void __iomem *base_addr;
 static struct clk *audioh_apb_clk;
 
 /*==========================================================================
@@ -150,17 +151,18 @@ static struct clk *audioh_apb_clk;
 *             CHAL handle for this ACI Accessory instance
 *
 */
-CHAL_HANDLE chal_aci_init(cUInt32 baseAddr_NotUsed)
+CHAL_HANDLE chal_aci_init(void __iomem *baseAddr_NotUsed)
 {
-	base_addr = (cUInt8 *)KONA_ACI_VA;
-	chal_aci_init_aci((cUInt32)base_addr);
-	audioh_apb_clk = clk_get(NULL, "audioh_apb_clk");
-	if (IS_ERR_OR_NULL(audioh_apb_clk)) {
-		pr_err("%s(): clk_get of audioh_apb_clk failed \r\n", __func__);
+	base_addr = KONA_ACI_VA;
+	chal_aci_init_aci(base_addr);
+	audioh_apb_clk =  clk_get(NULL, "audioh_apb_clk");
+	if (IS_ERR(audioh_apb_clk)) {
+		pr_err("%s(): clk_get of audioh_apb_clk failed\n", __func__);
 		audioh_apb_clk = NULL;
 	}
 	return (CHAL_HANDLE)base_addr;
 }
+
 
 /**
 * Description:  De-Initialize CHAL ACI for the passed ACI Accessory instance
@@ -169,9 +171,10 @@ CHAL_HANDLE chal_aci_init(cUInt32 baseAddr_NotUsed)
 *
 * return none
 */
-cVoid chal_aci_deinit(CHAL_HANDLE handle)
+cVoid chal_aci_deinit( CHAL_HANDLE handle )
 {
 }
+
 
 /**
 *   Control MIC line route
@@ -182,7 +185,7 @@ cVoid chal_aci_deinit(CHAL_HANDLE handle)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_set_mic_route(CHAL_HANDLE handle, CHAL_ACI_mic_route_t route)
+cVoid chal_aci_set_mic_route( CHAL_HANDLE handle, CHAL_ACI_mic_route_t route )
 {
 	/* Configure the MIC line route */
 
@@ -313,10 +316,10 @@ cVoid chal_aci_set_mic_route(CHAL_HANDLE handle, CHAL_ACI_mic_route_t route)
 		     AUDIORX_VREF_POWERCYCLE,
 		     AUDIORX_VREF_POWERCYCLE_NORMAL);
 #endif
-		break;
-	default:
-		CHAL_ASSERT(0);
-	}
+        break;
+    default:
+        CHAL_ASSERT(0);
+    }
 }
 
 /**
@@ -330,9 +333,7 @@ cVoid chal_aci_set_mic_route(CHAL_HANDLE handle, CHAL_ACI_mic_route_t route)
 *
 *   @todo   <todo list>
 */
-static void chal_aci_block_ctrl_arg(CHAL_HANDLE handle,
-				    CHAL_ACI_block_action_t action,
-				    CHAL_ACI_block_id_t id, va_list argp)
+static void chal_aci_block_ctrl_arg( CHAL_HANDLE handle, CHAL_ACI_block_action_t action, CHAL_ACI_block_id_t id, va_list argp )
 {
 	unsigned long reg_val;
 	unsigned long mask;
@@ -1078,14 +1079,14 @@ static void chal_aci_block_ctrl_arg(CHAL_HANDLE handle,
 	}
 }
 
-cVoid chal_aci_block_ctrl(CHAL_HANDLE handle, CHAL_ACI_block_action_t action,
-			  CHAL_ACI_block_id_t id, ...)
+cVoid chal_aci_block_ctrl( CHAL_HANDLE handle, CHAL_ACI_block_action_t action, CHAL_ACI_block_id_t id, ... )
 {
-	va_list argp;
-	va_start(argp, id);
-	chal_aci_block_ctrl_arg(handle, action, id, argp);
-	va_end(argp);
+    va_list argp;
+    va_start(argp, id);
+    chal_aci_block_ctrl_arg( handle, action, id, argp );
+    va_end(argp);
 }
+
 
 /**
 *   This function will read the value on a specified output and return the
@@ -1098,8 +1099,7 @@ cVoid chal_aci_block_ctrl(CHAL_HANDLE handle, CHAL_ACI_block_action_t action,
 *
 *   @todo   <todo list>
 */
-cInt32 chal_aci_block_read(CHAL_HANDLE handle, CHAL_ACI_block_id_t id,
-			   CHAL_ACI_block_output_id_t output)
+cInt32 chal_aci_block_read( CHAL_HANDLE handle, CHAL_ACI_block_id_t id, CHAL_ACI_block_output_id_t output )
 {
 	switch (id) {
 	case CHAL_ACI_BLOCK_COMP1:
@@ -1211,6 +1211,7 @@ cInt32 chal_aci_block_read(CHAL_HANDLE handle, CHAL_ACI_block_id_t id,
 	return -1;
 }
 
+
 /* -------------------------------------------------------------------------- */
 /*
  *
@@ -1229,7 +1230,7 @@ cInt32 chal_aci_block_read(CHAL_HANDLE handle, CHAL_ACI_block_id_t id,
 *
 *   @todo   <todo list>
 */
-static cVoid chal_aci_init_aci(cUInt32 baseAddr)
+static cVoid chal_aci_init_aci(void __iomem *baseAddr)
 {
 	/* Disable all interrupts from ACI block */
 	BRCM_WRITE_REG(KONA_ACI_VA, ACI_IMR, ACI_IMR_ACIIMR_MASK);
@@ -1250,6 +1251,7 @@ static cVoid chal_aci_init_aci(cUInt32 baseAddr)
 	HW_ACI_REGISTER_WRITE_SETTLE;
 }
 
+
 /**
 *   This function will enbale the ACI block
 *
@@ -1259,12 +1261,11 @@ static cVoid chal_aci_init_aci(cUInt32 baseAddr)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_enable_aci(void)
+cVoid chal_aci_enable_aci( void )
 {
-	BRCM_WRITE_REG_FIELD(KONA_ACI_VA, ACI_ACI_TX_INV, ACI_TX_INV,
-			     ACI_TX_INV_SETTING);
-	CHAL_ACI_WRITE_COMR(DBIDOC, ACI_COMR_DBIDOC_CMD_INUSE);
-	HW_ACI_REGISTER_WRITE_SETTLE;
+    BRCM_WRITE_REG_FIELD( KONA_ACI_VA, ACI_ACI_TX_INV, ACI_TX_INV,     ACI_TX_INV_SETTING);
+    CHAL_ACI_WRITE_COMR(                                 DBIDOC,         ACI_COMR_DBIDOC_CMD_INUSE );
+    HW_ACI_REGISTER_WRITE_SETTLE;
 }
 
 /**
@@ -1276,14 +1277,14 @@ cVoid chal_aci_enable_aci(void)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_disable_aci(void)
+cVoid chal_aci_disable_aci( void )
 {
-	BRCM_WRITE_REG_FIELD(KONA_ACI_VA, ACI_ACI_TX_INV, ACI_TX_INV,
-			     ACI_TX_INV_SETTING);
-	chal_aci_tx_output_high(TRUE);
-	CHAL_ACI_WRITE_COMR(DBIDOC, ACI_COMR_DBIDOC_CMD_DISABLED);
-	HW_ACI_REGISTER_WRITE_SETTLE;
+    BRCM_WRITE_REG_FIELD( KONA_ACI_VA, ACI_ACI_TX_INV,    ACI_TX_INV,     ACI_TX_INV_SETTING);
+    chal_aci_tx_output_high( TRUE );
+    CHAL_ACI_WRITE_COMR(                                    DBIDOC,         ACI_COMR_DBIDOC_CMD_DISABLED );
+    HW_ACI_REGISTER_WRITE_SETTLE;
 }
+
 
 /**
 *   This function will check if the ACI block is enabled
@@ -1294,10 +1295,9 @@ cVoid chal_aci_disable_aci(void)
 *
 *   @todo   <todo list>
 */
-cBool chal_aci_is_aci_enabled(void)
+cBool chal_aci_is_aci_enabled( void )
 {
-	return (BRCM_READ_REG_FIELD(KONA_ACI_VA, ACI_COMR, DBIDOC) ==
-		ACI_COMR_DBIDOC_CMD_INUSE ? TRUE : FALSE);
+    return (BRCM_READ_REG_FIELD( KONA_ACI_VA, ACI_COMR, DBIDOC ) == ACI_COMR_DBIDOC_CMD_INUSE ? TRUE : FALSE);
 }
 
 /**
@@ -1309,7 +1309,7 @@ cBool chal_aci_is_aci_enabled(void)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_rx_input_set(CHAL_ACI_RX_INPUT_TYPE_t input_type)
+cVoid chal_aci_rx_input_set( CHAL_ACI_RX_INPUT_TYPE_t input_type )
 {
 	if (input_type == CHAL_ACI_RX_DIRECT)
 		CHAL_ACI_WRITE_COMR(DBICON, ACI_COMR_DBICON_CMD_DIRECT);
@@ -1328,7 +1328,7 @@ cVoid chal_aci_rx_input_set(CHAL_ACI_RX_INPUT_TYPE_t input_type)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_bus_hold_set(CHAL_ACI_BUS_HOLD_TIME_t bus_hold)
+cVoid chal_aci_bus_hold_set( CHAL_ACI_BUS_HOLD_TIME_t bus_hold )
 {
 	if (bus_hold == CHAL_ACI_BUS_HOLD_2MS)
 		CHAL_ACI_WRITE_COMR(BUSHT, ACI_COMR_BUSHT_CMD_BUSHOLDTIME_2MS);
@@ -1337,6 +1337,7 @@ cVoid chal_aci_bus_hold_set(CHAL_ACI_BUS_HOLD_TIME_t bus_hold)
 
 	HW_ACI_REGISTER_WRITE_SETTLE;
 }
+
 
 /**
 *   This function will configure the Start Pulse Length
@@ -1347,13 +1348,14 @@ cVoid chal_aci_bus_hold_set(CHAL_ACI_BUS_HOLD_TIME_t bus_hold)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_start_pulse_set(cUInt8 start_pulse_length)
+cVoid chal_aci_start_pulse_set( cUInt8 start_pulse_length )
 {
 	if (start_pulse_length <= ACI_SPLR_ACISPLR_MASK)
 		BRCM_WRITE_REG(KONA_ACI_VA, ACI_SPLR, start_pulse_length);
 		HW_ACI_REGISTER_WRITE_SETTLE;
 
 }
+
 
 /**
 *   This function will configure the use of the RxDaR register
@@ -1364,7 +1366,7 @@ cVoid chal_aci_start_pulse_set(cUInt8 start_pulse_length)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_rxdar_use(CHAL_ACI_RXDAR_USE_t use)
+cVoid chal_aci_rxdar_use( CHAL_ACI_RXDAR_USE_t use )
 {
 	if (use == CHAL_ACI_RXDAR_NORMAL)
 		CHAL_ACI_WRITE_COMR(DBIDIC, ACI_COMR_DBIDIC_CMD_NORMAL);
@@ -1373,6 +1375,7 @@ cVoid chal_aci_rxdar_use(CHAL_ACI_RXDAR_USE_t use)
 
 	HW_ACI_REGISTER_WRITE_SETTLE;
 }
+
 
 /**
 *   This function will configure the RxDaR source
@@ -1383,7 +1386,7 @@ cVoid chal_aci_rxdar_use(CHAL_ACI_RXDAR_USE_t use)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_rxdar_source(CHAL_ACI_RXDAR_SOURCE_t source)
+cVoid chal_aci_rxdar_source( CHAL_ACI_RXDAR_SOURCE_t source )
 {
 	if (source == CHAL_ACI_RXDAR_SPEED)
 		CHAL_ACI_WRITE_COMR(DBIDIS, ACI_COMR_DBIDIS_CMD_SPEEDREG);
@@ -1392,6 +1395,7 @@ cVoid chal_aci_rxdar_source(CHAL_ACI_RXDAR_SOURCE_t source)
 
 	HW_ACI_REGISTER_WRITE_SETTLE;
 }
+
 
 /**
 *   This function will force Tx Output
@@ -1402,7 +1406,7 @@ cVoid chal_aci_rxdar_source(CHAL_ACI_RXDAR_SOURCE_t source)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_tx_output_high(cBool high)
+cVoid chal_aci_tx_output_high( cBool high )
 {
 	if (high)
 		CHAL_ACI_WRITE_COMR(DBIDOS, 0);
@@ -1411,6 +1415,7 @@ cVoid chal_aci_tx_output_high(cBool high)
 
 	HW_ACI_REGISTER_WRITE_SETTLE;
 }
+
 
 /**
 *   This function will read the Interrupt status register
@@ -1421,11 +1426,11 @@ cVoid chal_aci_tx_output_high(cBool high)
 *
 *   @todo   <todo list>
 */
-CHAL_ACI_INTERRUPT_MASK_t chal_aci_interrupt_read(void)
+CHAL_ACI_INTERRUPT_MASK_t chal_aci_interrupt_read( void  )
 {
-	return (CHAL_ACI_INTERRUPT_MASK_t) (BRCM_READ_REG
-					    (KONA_ACI_VA, ACI_IIDR));
+    return (CHAL_ACI_INTERRUPT_MASK_t)(BRCM_READ_REG( KONA_ACI_VA, ACI_IIDR ));
 }
+
 
 /**
 *   This function will read Rx input
@@ -1436,10 +1441,11 @@ CHAL_ACI_INTERRUPT_MASK_t chal_aci_interrupt_read(void)
 *
 *   @todo   <todo list>
 */
-cUInt16 chal_aci_rx_read(void)
+cUInt16 chal_aci_rx_read( void )
 {
-	return (cUInt16) (BRCM_READ_REG(KONA_ACI_VA, ACI_RXDAR));
+    return (cUInt16)(BRCM_READ_REG( KONA_ACI_VA, ACI_RXDAR ));
 }
+
 
 /**
 *   This function will write the Tx output register
@@ -1450,10 +1456,10 @@ cUInt16 chal_aci_rx_read(void)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_tx_write(cUInt16 data)
+cVoid chal_aci_tx_write( cUInt16 data )
 {
-	BRCM_WRITE_REG(KONA_ACI_VA, ACI_TXDAR, data);
-	HW_ACI_REGISTER_WRITE_SETTLE;
+    BRCM_WRITE_REG( KONA_ACI_VA, ACI_TXDAR, data);
+    HW_ACI_REGISTER_WRITE_SETTLE;
 }
 
 /**
@@ -1465,17 +1471,19 @@ cVoid chal_aci_tx_write(cUInt16 data)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_command(CHAL_ACI_COMMAND_t command)
+cVoid chal_aci_command( CHAL_ACI_COMMAND_t command )
 {
-	if (command <= CHAL_ACI_CMD_MAX) {
-		cUInt16 reg;
-		reg = (cUInt16) BRCM_READ_REG(KONA_ACI_VA, ACI_COMR);
-		reg &= ~ACI_COMR_DBICMD_MASK;
-		reg |= (command & ACI_COMR_DBICMD_MASK);
-		BRCM_WRITE_REG(KONA_ACI_VA, ACI_COMR, reg);
-		HW_ACI_REGISTER_WRITE_SETTLE;
-	}
+    if (command <= CHAL_ACI_CMD_MAX)
+    {
+        cUInt16 reg;
+        reg = (cUInt16)BRCM_READ_REG( KONA_ACI_VA, ACI_COMR );
+        reg &= ~ACI_COMR_DBICMD_MASK;
+        reg |= (command & ACI_COMR_DBICMD_MASK);
+        BRCM_WRITE_REG( KONA_ACI_VA, ACI_COMR, reg);
+        HW_ACI_REGISTER_WRITE_SETTLE;
+    }
 }
+
 
 /**
 *   This function will enable ACI block interrupts given by mask
@@ -1486,15 +1494,16 @@ cVoid chal_aci_command(CHAL_ACI_COMMAND_t command)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_interrupt_enable(CHAL_ACI_INTERRUPT_SELECT_t mask)
+cVoid chal_aci_interrupt_enable( CHAL_ACI_INTERRUPT_SELECT_t mask )
 {
-	cUInt16 reg;
+    cUInt16 reg;
 
-	reg = (cUInt16) BRCM_READ_REG(KONA_ACI_VA, ACI_IMR);
-	reg &= ~mask;
-	BRCM_WRITE_REG(KONA_ACI_VA, ACI_IMR, reg);
-	HW_ACI_REGISTER_WRITE_SETTLE;
+    reg = (cUInt16)BRCM_READ_REG( KONA_ACI_VA, ACI_IMR );
+    reg &= ~mask;
+    BRCM_WRITE_REG( KONA_ACI_VA, ACI_IMR, reg);
+    HW_ACI_REGISTER_WRITE_SETTLE;
 }
+
 
 /**
 *   This function will disable ACI block interrupts given by mask
@@ -1505,15 +1514,16 @@ cVoid chal_aci_interrupt_enable(CHAL_ACI_INTERRUPT_SELECT_t mask)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_interrupt_disable(CHAL_ACI_INTERRUPT_SELECT_t mask)
+cVoid chal_aci_interrupt_disable( CHAL_ACI_INTERRUPT_SELECT_t mask )
 {
-	cUInt16 reg;
+    cUInt16 reg;
 
-	reg = (cUInt16) BRCM_READ_REG(KONA_ACI_VA, ACI_IMR);
-	reg |= mask;
-	BRCM_WRITE_REG(KONA_ACI_VA, ACI_IMR, reg);
-	HW_ACI_REGISTER_WRITE_SETTLE;
-}
+    reg = (cUInt16)BRCM_READ_REG( KONA_ACI_VA, ACI_IMR );
+    reg |= mask;
+    BRCM_WRITE_REG( KONA_ACI_VA, ACI_IMR, reg);
+    HW_ACI_REGISTER_WRITE_SETTLE;
+} 
+
 
 /**
 *   This function will acknowledge ACI block interrupts given by mask
@@ -1524,11 +1534,12 @@ cVoid chal_aci_interrupt_disable(CHAL_ACI_INTERRUPT_SELECT_t mask)
 *
 *   @todo   <todo list>
 */
-cVoid chal_aci_interrupt_acknowledge(CHAL_ACI_INTERRUPT_SELECT_t mask)
+cVoid chal_aci_interrupt_acknowledge( CHAL_ACI_INTERRUPT_SELECT_t mask )
 {
-	BRCM_WRITE_REG(KONA_ACI_VA, ACI_IIDR, mask);
-	HW_ACI_REGISTER_WRITE_SETTLE;
+    BRCM_WRITE_REG( KONA_ACI_VA, ACI_IIDR, mask);
+    HW_ACI_REGISTER_WRITE_SETTLE;
 }
+
 
 /***************************************************************************
 *   This function will power on the ACI part for AUX MIC for audio
@@ -1541,18 +1552,20 @@ cVoid chal_aci_interrupt_acknowledge(CHAL_ACI_INTERRUPT_SELECT_t mask)
 */
 cVoid chal_aci_powerup_auxmic(void)
 {
-	/* 0x3500E0D0 = 0x20 */
+	/* 0x3500E0D0 = 0x20*/
 	BRCM_WRITE_REG(KONA_ACI_VA, ACI_ACI_CTRL, 0x00000020);
-	/* 0x35000E0D4 = 0xC0 */
+	/* 0x35000E0D4 = 0xC0*/
 	BRCM_WRITE_REG(KONA_ACI_VA, ACI_ADC_CTRL, 0x000000C0);
-	/* 0x35000E028 = 0x0 */
+	/* 0x35000E028 = 0x0*/
 	BRCM_WRITE_REG(KONA_AUXMIC_VA, AUXMIC_F_PWRDWN, 0x00000000);
-	/* 0x35000E00C = 0x1 */
+	/* 0x35000E00C = 0x1*/
 	BRCM_WRITE_REG(KONA_AUXMIC_VA, AUXMIC_CMC, 0x00000001);
-	/* 0x35000E0C4 = 0x0 */
+	/* 0x35000E0C4 = 0x0*/
 	BRCM_WRITE_REG(KONA_ACI_VA, ACI_MIC_BIAS, 0x00000000);
-	/* 0x35000E014 = 0x1 */
+	/* 0x35000E014 = 0x1*/
 	BRCM_WRITE_REG(KONA_AUXMIC_VA, AUXMIC_AUXEN, 0x00000001);
 }
 
 /** @} */
+
+
