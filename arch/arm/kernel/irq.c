@@ -80,8 +80,11 @@ asm_do_IRQ(unsigned int irq, struct pt_regs *regs)
 {
 	struct pt_regs *old_regs = set_irq_regs(regs);
 #ifdef CONFIG_BCM_KNLLOG_IRQ
-	struct irq_desc *desc;
+	struct irq_desc *desc = irq_desc + irq;
 #endif
+
+	void dpm_log_irq(u32 irq);
+	dpm_log_irq(irq);
 
 	irq_enter();
 
@@ -95,7 +98,6 @@ asm_do_IRQ(unsigned int irq, struct pt_regs *regs)
 		ack_bad_irq(irq);
 	} else {
 #ifdef CONFIG_BCM_KNLLOG_IRQ
-		desc = irq_desc + irq;
 		if (gKnllogIrqSchedEnable & KNLLOG_IRQ)
 			KNLLOG("in  [%d] (0x%x)\n", irq, (int)desc);
 #endif
